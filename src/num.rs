@@ -1,175 +1,53 @@
-pub trait Integer {
-    fn to_bytes(&self) -> Vec<u8>;
+//! Big-endian integer trait used by the protocol serialization layer.
+//!
+//! This trait is implemented for all standard integer and float types. It is
+//! used internally by `ser.rs` to provide blanket `Serialize`/`Deserialize`
+//! implementations and is also useful for users writing custom packet fields.
 
+/// A type that can be serialized to and from a fixed-length big-endian byte sequence.
+pub trait Integer: Sized + Copy {
+    /// Serialize to big-endian bytes.
+    fn to_bytes(self) -> Vec<u8>;
+
+    /// Deserialize from big-endian bytes.
     fn from_bytes(bytes: &[u8]) -> Self;
 
+    /// The byte length of the serialized form.
     fn byte_len() -> usize;
 }
 
-impl Integer for i8 {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.to_be_bytes().to_vec()
-    }
+macro_rules! impl_integer {
+    ($t:ty) => {
+        impl Integer for $t {
+            #[inline]
+            fn to_bytes(self) -> Vec<u8> {
+                self.to_be_bytes().to_vec()
+            }
 
-    fn from_bytes(bytes: &[u8]) -> Self {
-        i8::from_be_bytes(bytes.try_into().unwrap())
-    }
+            #[inline]
+            fn from_bytes(bytes: &[u8]) -> Self {
+                let arr: [u8; std::mem::size_of::<$t>()] = bytes.try_into()
+                    .expect("byte slice has wrong length");
+                <$t>::from_be_bytes(arr)
+            }
 
-    fn byte_len() -> usize {
-        std::mem::size_of::<Self>()
-    }
+            #[inline]
+            fn byte_len() -> usize {
+                std::mem::size_of::<$t>()
+            }
+        }
+    };
 }
 
-impl Integer for i16 {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.to_be_bytes().to_vec()
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        i16::from_be_bytes(bytes.try_into().unwrap())
-    }
-
-    fn byte_len() -> usize {
-        std::mem::size_of::<Self>()
-    }
-}
-
-impl Integer for i32 {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.to_be_bytes().to_vec()
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        i32::from_be_bytes(bytes.try_into().unwrap())
-    }
-
-    fn byte_len() -> usize {
-        std::mem::size_of::<Self>()
-    }
-}
-
-impl Integer for i64 {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.to_be_bytes().to_vec()
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        i64::from_be_bytes(bytes.try_into().unwrap())
-    }
-
-    fn byte_len() -> usize {
-        std::mem::size_of::<Self>()
-    }
-}
-
-impl Integer for u8 {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.to_be_bytes().to_vec()
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        u8::from_be_bytes(bytes.try_into().unwrap())
-    }
-
-    fn byte_len() -> usize {
-        std::mem::size_of::<Self>()
-    }
-}
-
-impl Integer for u16 {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.to_be_bytes().to_vec()
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        u16::from_be_bytes(bytes.try_into().unwrap())
-    }
-
-    fn byte_len() -> usize {
-        std::mem::size_of::<Self>()
-    }
-}
-
-impl Integer for u32 {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.to_be_bytes().to_vec()
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        u32::from_be_bytes(bytes.try_into().unwrap())
-    }
-
-    fn byte_len() -> usize {
-        std::mem::size_of::<Self>()
-    }
-}
-
-impl Integer for u64 {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.to_be_bytes().to_vec()
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        u64::from_be_bytes(bytes.try_into().unwrap())
-    }
-
-    fn byte_len() -> usize {
-        std::mem::size_of::<Self>()
-    }
-}
-
-impl Integer for u128 {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.to_be_bytes().to_vec()
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        u128::from_be_bytes(bytes.try_into().unwrap())
-    }
-
-    fn byte_len() -> usize {
-        std::mem::size_of::<Self>()
-    }
-}
-
-impl Integer for i128 {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.to_be_bytes().to_vec()
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        i128::from_be_bytes(bytes.try_into().unwrap())
-    }
-
-    fn byte_len() -> usize {
-        std::mem::size_of::<Self>()
-    }
-}
-
-impl Integer for f32 {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.to_be_bytes().to_vec()
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        f32::from_be_bytes(bytes.try_into().unwrap())
-    }
-
-    fn byte_len() -> usize {
-        std::mem::size_of::<Self>()
-    }
-}
-
-impl Integer for f64 {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.to_be_bytes().to_vec()
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        f64::from_be_bytes(bytes.try_into().unwrap())
-    }
-
-    fn byte_len() -> usize {
-        std::mem::size_of::<Self>()
-    }
-}
+impl_integer!(i8);
+impl_integer!(i16);
+impl_integer!(i32);
+impl_integer!(i64);
+impl_integer!(i128);
+impl_integer!(u8);
+impl_integer!(u16);
+impl_integer!(u32);
+impl_integer!(u64);
+impl_integer!(u128);
+impl_integer!(f32);
+impl_integer!(f64);

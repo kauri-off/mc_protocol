@@ -1,13 +1,69 @@
 [package]
 name = "minecraft_protocol"
-version = "0.1.0"
-edition = "2024"
+version = "2.0.0"
+edition = "2021"
+authors = ["kauri-off"]
+description = "A complete Rust implementation of the Minecraft Java Edition network protocol"
+license = "MIT"
+repository = "https://github.com/kauri-off/minecraft_protocol"
+keywords = ["minecraft", "protocol", "networking", "varint", "encryption"]
+categories = ["network-programming", "encoding", "game-development"]
+
+[features]
+default = ["async", "encryption", "compression"]
+# Enable async I/O via tokio
+async = ["dep:tokio"]
+# Enable AES-128-CFB8 encryption support
+encryption = ["dep:openssl"]
+# Enable zlib packet compression support
+compression = ["dep:flate2"]
 
 [dependencies]
-openssl = "0.10.75"
 thiserror = "2.0.18"
-tokio = { version = "1.49.0", features = ["full"] }
+uuid = { version = "1.21.0", features = ["v4"] }
+
+tokio = { version = "1.49.0", features = ["full"], optional = true }
+openssl = { version = "0.10.75", optional = true }
+flate2 = { version = "1.1.9", optional = true }
+
 minecraft_protocol_derive = { path = "./minecraft_protocol_derive" }
 
 [target.'cfg(windows)'.dependencies]
-openssl = { version = "0.10.75", features = ["vendored"] }
+openssl = { version = "0.10.75", features = ["vendored"], optional = true }
+
+[dev-dependencies]
+tokio = { version = "1.49.0", features = ["full"] }
+
+[[test]]
+name = "varint"
+path = "tests/varint.rs"
+
+[[test]]
+name = "varlong"
+path = "tests/varlong.rs"
+
+[[test]]
+name = "types"
+path = "tests/types.rs"
+
+[[test]]
+name = "position"
+path = "tests/position.rs"
+
+[[test]]
+name = "packet"
+path = "tests/packet.rs"
+
+[[test]]
+name = "bitset"
+path = "tests/bitset.rs"
+
+[[test]]
+name = "encryption"
+path = "tests/encryption.rs"
+required-features = ["encryption"]
+
+[[test]]
+name = "compression"
+path = "tests/compression.rs"
+required-features = ["compression"]
