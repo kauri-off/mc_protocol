@@ -1,7 +1,7 @@
 //! Tests for zlib packet compression.
 
-use minecraft_protocol::compression::{compress_zlib, compress_zlib_level, decompress_zlib};
-use minecraft_protocol::packet::UncompressedPacket;
+use mc_protocol::compression::{compress_zlib, compress_zlib_level, decompress_zlib};
+use mc_protocol::packet::UncompressedPacket;
 
 // ---------------------------------------------------------------------------
 // compress_zlib / decompress_zlib

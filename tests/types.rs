@@ -1,6 +1,6 @@
 //! Tests for primitive and complex type serialization/deserialization.
 
-use minecraft_protocol::ser::{Deserialize, RawBytes, Serialize};
+use mc_protocol::ser::{Deserialize, RawBytes, Serialize};
 use std::io::Cursor;
 use uuid::Uuid;
 

@@ -16,8 +16,8 @@
 //! # Examples
 //!
 //! ```
-//! use minecraft_protocol::varint::{VarInt, VarLong};
-//! use minecraft_protocol::ser::{Serialize, Deserialize};
+//! use mc_protocol::varint::{VarInt, VarLong};
+//! use mc_protocol::ser::{Serialize, Deserialize};
 //! use std::io::Cursor;
 //!
 //! let mut buf = Vec::new();
@@ -163,14 +163,19 @@ impl VarInt {
 
     /// Encode this `VarInt` into an async writer (requires `async` feature).
     #[cfg(feature = "async")]
-    pub async fn write_async<W: AsyncWrite + Unpin>(&self, writer: &mut W) -> Result<(), VarIntError> {
+    pub async fn write_async<W: AsyncWrite + Unpin>(
+        &self,
+        writer: &mut W,
+    ) -> Result<(), VarIntError> {
         let mut value = self.0 as u32;
         loop {
             if value & !(SEGMENT_BITS as u32) == 0 {
                 writer.write_u8(value as u8).await?;
                 return Ok(());
             }
-            writer.write_u8(((value as u8) & SEGMENT_BITS) | CONTINUE_BIT).await?;
+            writer
+                .write_u8(((value as u8) & SEGMENT_BITS) | CONTINUE_BIT)
+                .await?;
             value >>= 7;
         }
     }
@@ -291,14 +296,19 @@ impl VarLong {
 
     /// Encode this `VarLong` into an async writer (requires `async` feature).
     #[cfg(feature = "async")]
-    pub async fn write_async<W: AsyncWrite + Unpin>(&self, writer: &mut W) -> Result<(), VarIntError> {
+    pub async fn write_async<W: AsyncWrite + Unpin>(
+        &self,
+        writer: &mut W,
+    ) -> Result<(), VarIntError> {
         let mut value = self.0 as u64;
         loop {
             if value & !(SEGMENT_BITS as u64) == 0 {
                 writer.write_u8(value as u8).await?;
                 return Ok(());
             }
-            writer.write_u8(((value as u8) & SEGMENT_BITS) | CONTINUE_BIT).await?;
+            writer
+                .write_u8(((value as u8) & SEGMENT_BITS) | CONTINUE_BIT)
+                .await?;
             value >>= 7;
         }
     }

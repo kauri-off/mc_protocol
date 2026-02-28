@@ -8,7 +8,7 @@
 //!
 //! ```rust,no_run
 //! use std::net::TcpStream;
-//! use minecraft_protocol::encryption::{Cfb8Encryptor, Cfb8Decryptor};
+//! use mc_protocol::encryption::{Cfb8Encryptor, Cfb8Decryptor};
 //!
 //! let key = [0u8; 16]; // replace with actual shared secret
 //! let mut stream = TcpStream::connect("127.0.0.1:25565").unwrap();
@@ -25,7 +25,7 @@
 //!
 //! ```rust,no_run
 //! use tokio::net::TcpStream;
-//! use minecraft_protocol::encryption::Cfb8Stream;
+//! use mc_protocol::encryption::Cfb8Stream;
 //!
 //! # #[tokio::main] async fn main() -> std::io::Result<()> {
 //! let stream = TcpStream::connect("127.0.0.1:25565").await?;
@@ -42,8 +42,8 @@ use {
     std::pin::Pin,
     std::task::{Context, Poll},
     tokio::io::{AsyncRead, AsyncWrite, ReadBuf},
-    tokio::net::TcpStream,
     tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf},
+    tokio::net::TcpStream,
 };
 
 // ---------------------------------------------------------------------------

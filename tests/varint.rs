@@ -3,8 +3,8 @@
 //! Reference values taken directly from the Minecraft Java Edition protocol
 //! data types documentation.
 
-use minecraft_protocol::ser::{Deserialize, Serialize};
-use minecraft_protocol::varint::VarInt;
+use mc_protocol::ser::{Deserialize, Serialize};
+use mc_protocol::varint::VarInt;
 use std::io::Cursor;
 
 // ---------------------------------------------------------------------------
@@ -187,15 +187,28 @@ fn varint_into_i32() {
 
 #[cfg(feature = "async")]
 mod async_tests {
-    use minecraft_protocol::varint::VarInt;
+    use mc_protocol::varint::VarInt;
 
     #[tokio::test]
     async fn varint_async_round_trip() {
-        let values = [0, 1, 127, 128, 255, 25565, 2097151, 2147483647, -1, -2147483648];
+        let values = [
+            0,
+            1,
+            127,
+            128,
+            255,
+            25565,
+            2097151,
+            2147483647,
+            -1,
+            -2147483648,
+        ];
         for &v in &values {
             let mut buf = Vec::new();
             VarInt(v).write_async(&mut buf).await.unwrap();
-            let decoded = VarInt::read_async(&mut std::io::Cursor::new(&buf)).await.unwrap();
+            let decoded = VarInt::read_async(&mut std::io::Cursor::new(&buf))
+                .await
+                .unwrap();
             assert_eq!(decoded.0, v, "Async round-trip failed for {}", v);
         }
     }

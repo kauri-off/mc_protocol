@@ -1,4 +1,4 @@
-//! Procedural macros for `minecraft_protocol`.
+//! Procedural macros for `mc_protocol`.
 //!
 //! Provides `#[derive(Packet)]` which automatically generates
 //! `Serialize`, `Deserialize`, and packet framing helpers for structs.
@@ -71,7 +71,7 @@ fn expand_packet(input: &DeriveInput) -> syn::Result<TokenStream2> {
         .iter()
         .map(|ident| {
             quote! {
-                minecraft_protocol::ser::Serialize::serialize(&self.#ident, __writer)?;
+                mc_protocol::ser::Serialize::serialize(&self.#ident, __writer)?;
             }
         })
         .collect();
@@ -82,7 +82,7 @@ fn expand_packet(input: &DeriveInput) -> syn::Result<TokenStream2> {
         .zip(field_types.iter())
         .map(|(ident, ty)| {
             quote! {
-                #ident: <#ty as minecraft_protocol::ser::Deserialize>::deserialize(__reader)?,
+                #ident: <#ty as mc_protocol::ser::Deserialize>::deserialize(__reader)?,
             }
         })
         .collect();
@@ -93,27 +93,27 @@ fn expand_packet(input: &DeriveInput) -> syn::Result<TokenStream2> {
             pub const PACKET_ID: i32 = #packet_id_expr as i32;
         }
 
-        impl minecraft_protocol::ser::Serialize for #struct_name {
+        impl mc_protocol::ser::Serialize for #struct_name {
             fn serialize<W: std::io::Write + Unpin>(
                 &self,
                 __writer: &mut W,
-            ) -> Result<(), minecraft_protocol::ser::SerializationError> {
+            ) -> Result<(), mc_protocol::ser::SerializationError> {
                 #(#serialize_calls)*
                 Ok(())
             }
         }
 
-        impl minecraft_protocol::ser::Deserialize for #struct_name {
+        impl mc_protocol::ser::Deserialize for #struct_name {
             fn deserialize<R: std::io::Read + Unpin>(
                 __reader: &mut R,
-            ) -> Result<Self, minecraft_protocol::ser::SerializationError> {
+            ) -> Result<Self, mc_protocol::ser::SerializationError> {
                 Ok(Self {
                     #(#deserialize_calls)*
                 })
             }
         }
 
-        impl minecraft_protocol::packet::PacketId for #struct_name {
+        impl mc_protocol::packet::PacketId for #struct_name {
             fn packet_id(&self) -> i32 {
                 Self::PACKET_ID
             }

@@ -1,15 +1,15 @@
 //! Tests for packet framing and the derive macro.
 
-use minecraft_protocol::packet::{PacketId, RawPacket, UncompressedPacket};
-use minecraft_protocol::ser::{Deserialize, Serialize};
-use minecraft_protocol::varint::VarInt;
+use mc_protocol::packet::{PacketId, RawPacket, UncompressedPacket};
+use mc_protocol::ser::{Deserialize, Serialize};
+use mc_protocol::varint::VarInt;
 use std::io::Cursor;
 
 // ---------------------------------------------------------------------------
 // A concrete test packet using the derive macro
 // ---------------------------------------------------------------------------
 
-#[derive(minecraft_protocol::Packet, Debug, PartialEq)]
+#[derive(mc_protocol::Packet, Debug, PartialEq)]
 #[packet(0x00)]
 struct Handshake {
     protocol_version: VarInt,

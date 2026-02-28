@@ -1,4 +1,4 @@
-# minecraft_protocol
+# mc_protocol
 
 Rust implementation of the Minecraft Java Edition network protocol primitives: serialization of basic types, packet framing, AES-128-CFB8 encryption, and Zlib compression.
 
@@ -14,14 +14,14 @@ Rust implementation of the Minecraft Java Edition network protocol primitives: s
 
 ```toml
 [dependencies]
-minecraft_protocol = { git = "https://github.com/kauri-off/minecraft_protocol.git" }
+mc_protocol = { git = "https://github.com/kauri-off/mc_protocol.git" }
 ```
 
 To disable optional features:
 
 ```toml
 [dependencies]
-minecraft_protocol = { git = "https://github.com/kauri-off/minecraft_protocol.git", default-features = false }
+mc_protocol = { git = "https://github.com/kauri-off/mc_protocol.git", default-features = false }
 ```
 
 ## Feature Flags
@@ -39,7 +39,7 @@ minecraft_protocol = { git = "https://github.com/kauri-off/minecraft_protocol.gi
 Define a packet struct and derive serialization automatically:
 
 ```rust
-use minecraft_protocol::{Packet, varint::VarInt};
+use mc_protocol::{Packet, varint::VarInt};
 
 #[derive(Packet, Debug)]
 #[packet(0x00)]
@@ -58,8 +58,8 @@ assert_eq!(Handshake::PACKET_ID, 0x00);
 All basic types implement `Serialize` and `Deserialize`:
 
 ```rust
-use minecraft_protocol::ser::{Serialize, Deserialize};
-use minecraft_protocol::varint::VarInt;
+use mc_protocol::ser::{Serialize, Deserialize};
+use mc_protocol::varint::VarInt;
 use std::io::Cursor;
 
 let mut buf = Vec::new();
@@ -73,7 +73,7 @@ assert_eq!(v.0, 300);
 ### Packet framing (sync)
 
 ```rust
-use minecraft_protocol::packet::{UncompressedPacket, RawPacket};
+use mc_protocol::packet::{UncompressedPacket, RawPacket};
 use std::net::TcpStream;
 
 let mut stream = TcpStream::connect("127.0.0.1:25565")?;
@@ -89,7 +89,7 @@ up.write_sync(&mut stream)?;
 ### Packet framing (async)
 
 ```rust
-use minecraft_protocol::packet::{UncompressedPacket, RawPacket};
+use mc_protocol::packet::{UncompressedPacket, RawPacket};
 use tokio::net::TcpStream;
 
 let mut stream = TcpStream::connect("127.0.0.1:25565").await?;
@@ -104,7 +104,7 @@ up.write_async(&mut stream).await?;
 ### Compression
 
 ```rust
-use minecraft_protocol::packet::UncompressedPacket;
+use mc_protocol::packet::UncompressedPacket;
 
 let up = UncompressedPacket::new(0x26, payload);
 let threshold = Some(256);
@@ -116,7 +116,7 @@ let decoded = raw.uncompress(threshold)?;
 ### Encryption (sync)
 
 ```rust
-use minecraft_protocol::encryption::{Cfb8Encryptor, Cfb8Decryptor};
+use mc_protocol::encryption::{Cfb8Encryptor, Cfb8Decryptor};
 
 let key: [u8; 16] = shared_secret;
 let mut encryptor = Cfb8Encryptor::new(&key)?;
@@ -129,7 +129,7 @@ let plaintext = decryptor.decrypt(&ciphertext)?;
 ### Encryption (async stream)
 
 ```rust
-use minecraft_protocol::encryption::Cfb8Stream;
+use mc_protocol::encryption::Cfb8Stream;
 use tokio::net::TcpStream;
 
 let stream = TcpStream::connect("127.0.0.1:25565").await?;

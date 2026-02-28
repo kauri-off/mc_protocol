@@ -8,7 +8,7 @@
 //! # Example
 //!
 //! ```rust
-//! use minecraft_protocol::compression::{compress_zlib, decompress_zlib};
+//! use mc_protocol::compression::{compress_zlib, decompress_zlib};
 //!
 //! let data = b"Hello, Minecraft!";
 //! let compressed = compress_zlib(data).unwrap();
@@ -16,7 +16,7 @@
 //! assert_eq!(&decompressed, data);
 //! ```
 
-use flate2::{Compression, read::ZlibDecoder, write::ZlibEncoder};
+use flate2::{read::ZlibDecoder, write::ZlibEncoder, Compression};
 use std::io::{Read, Write};
 use thiserror::Error;
 
@@ -30,7 +30,10 @@ pub enum CompressionError {
 
 impl From<CompressionError> for crate::packet::PacketError {
     fn from(e: CompressionError) -> Self {
-        crate::packet::PacketError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+        crate::packet::PacketError::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            e.to_string(),
+        ))
     }
 }
 

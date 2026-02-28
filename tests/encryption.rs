@@ -1,6 +1,6 @@
 //! Tests for AES-128-CFB8 encryption.
 
-use minecraft_protocol::encryption::{Cfb8Decryptor, Cfb8Encryptor};
+use mc_protocol::encryption::{Cfb8Decryptor, Cfb8Encryptor};
 
 const TEST_KEY: &[u8; 16] = b"abcdefghijklmnop";
 const ZERO_KEY: &[u8; 16] = &[0u8; 16];
@@ -136,7 +136,7 @@ fn wrong_key_fails_to_decrypt_correctly() {
 
 #[test]
 fn sync_read_half_decrypts_on_read() {
-    use minecraft_protocol::encryption::Cfb8ReadHalf;
+    use mc_protocol::encryption::Cfb8ReadHalf;
     use std::io::Read;
 
     let plaintext = b"Sync read test data";
@@ -152,7 +152,7 @@ fn sync_read_half_decrypts_on_read() {
 
 #[test]
 fn sync_write_half_encrypts_on_write() {
-    use minecraft_protocol::encryption::{Cfb8ReadHalf, Cfb8WriteHalf};
+    use mc_protocol::encryption::{Cfb8ReadHalf, Cfb8WriteHalf};
     use std::io::{Read, Write};
 
     let plaintext = b"Sync write test data";
@@ -176,7 +176,7 @@ fn sync_write_half_encrypts_on_write() {
 
 #[cfg(feature = "async")]
 mod async_tests {
-    use minecraft_protocol::encryption::{AsyncCfb8ReadHalf, AsyncCfb8WriteHalf, Cfb8Encryptor};
+    use mc_protocol::encryption::{AsyncCfb8ReadHalf, AsyncCfb8WriteHalf, Cfb8Encryptor};
     use std::io::Cursor;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -193,7 +193,7 @@ mod async_tests {
         drop(write_half);
 
         // Re-encrypt the decrypted buf to verify round-trip...
-        let mut dec = minecraft_protocol::encryption::Cfb8Decryptor::new(TEST_KEY).unwrap();
+        let mut dec = mc_protocol::encryption::Cfb8Decryptor::new(TEST_KEY).unwrap();
         let recovered = dec.decrypt(&buf).unwrap();
         assert_eq!(recovered, plaintext);
     }

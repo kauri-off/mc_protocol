@@ -2,8 +2,8 @@
 //!
 //! Reference values taken from the Minecraft Java Edition protocol documentation.
 
-use minecraft_protocol::ser::{Deserialize, Serialize};
-use minecraft_protocol::varint::VarLong;
+use mc_protocol::ser::{Deserialize, Serialize};
+use mc_protocol::varint::VarLong;
 use std::io::Cursor;
 
 fn round_trip(value: i64) -> i64 {
@@ -64,7 +64,10 @@ fn varlong_max_positive() {
 fn varlong_negative_one() {
     let mut buf = Vec::new();
     VarLong(-1).serialize(&mut buf).unwrap();
-    assert_eq!(buf, &[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01]);
+    assert_eq!(
+        buf,
+        &[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01]
+    );
     assert_eq!(round_trip(-1), -1);
 }
 

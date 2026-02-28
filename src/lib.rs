@@ -1,4 +1,4 @@
-//! # minecraft_protocol
+//! # mc_protocol
 //!
 //! Rust implementation of the Minecraft Java Edition network protocol primitives:
 //! serialization, packet framing, encryption, and compression.
@@ -14,8 +14,8 @@
 //! ## Quick start
 //!
 //! ```rust
-//! use minecraft_protocol::varint::VarInt;
-//! use minecraft_protocol::ser::{Serialize, Deserialize};
+//! use mc_protocol::varint::VarInt;
+//! use mc_protocol::ser::{Serialize, Deserialize};
 //! use std::io::Cursor;
 //!
 //! let mut buf = Vec::new();
@@ -28,12 +28,12 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-pub use minecraft_protocol_derive::*;
+pub use mc_protocol_derive::*;
 
+pub mod num;
+pub mod packet;
 pub mod ser;
 pub mod varint;
-pub mod packet;
-pub mod num;
 
 #[cfg(feature = "encryption")]
 pub mod encryption;
