@@ -1,6 +1,6 @@
 [package]
 name = "mc_protocol"
-version = "2.0.0"
+version = "2.0.1"
 edition = "2021"
 authors = ["kauri-off"]
 description = "Rust implementation of Minecraft Java Edition protocol primitives: serialization, packet framing, encryption, and compression"

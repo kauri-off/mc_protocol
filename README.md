@@ -14,14 +14,14 @@ Rust implementation of the Minecraft Java Edition network protocol primitives: s
 
 ```toml
 [dependencies]
-mc_protocol = { git = "https://github.com/kauri-off/mc_protocol.git" }
+mc_protocol = "2.0.0"
 ```
 
 To disable optional features:
 
 ```toml
 [dependencies]
-mc_protocol = { git = "https://github.com/kauri-off/mc_protocol.git", default-features = false }
+mc_protocol = { version = "2.0.0", default-features = false }
 ```
 
 ## Feature Flags
