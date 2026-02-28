@@ -3,7 +3,7 @@ name = "minecraft_protocol"
 version = "2.0.0"
 edition = "2021"
 authors = ["kauri-off"]
-description = "A complete Rust implementation of the Minecraft Java Edition network protocol"
+description = "Rust implementation of Minecraft Java Edition protocol primitives: serialization, packet framing, encryption, and compression"
 license = "MIT"
 repository = "https://github.com/kauri-off/minecraft_protocol"
 keywords = ["minecraft", "protocol", "networking", "varint", "encryption"]
@@ -47,16 +47,8 @@ name = "types"
 path = "tests/types.rs"
 
 [[test]]
-name = "position"
-path = "tests/position.rs"
-
-[[test]]
 name = "packet"
 path = "tests/packet.rs"
-
-[[test]]
-name = "bitset"
-path = "tests/bitset.rs"
 
 [[test]]
 name = "encryption"
