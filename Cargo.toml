@@ -1,6 +1,6 @@
 [package]
 name = "mc_protocol"
-version = "2.0.1"
+version = "2.0.2"
 edition = "2021"
 authors = ["kauri-off"]
 description = "Rust implementation of Minecraft Java Edition protocol primitives: serialization, packet framing, encryption, and compression"
@@ -10,7 +10,7 @@ keywords = ["minecraft", "protocol", "networking", "varint", "encryption"]
 categories = ["network-programming", "encoding", "game-development"]
 
 [features]
-default = ["async", "encryption", "compression"]
+default = ["async", "compression"]
 # Enable async I/O via tokio
 async = ["dep:tokio"]
 # Enable AES-128-CFB8 encryption support

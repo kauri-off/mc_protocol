@@ -14,23 +14,30 @@ Rust implementation of the Minecraft Java Edition network protocol primitives: s
 
 ```toml
 [dependencies]
-mc_protocol = "2.0.0"
+mc_protocol = "2.0.2"
 ```
 
-To disable optional features:
+To enable encryption:
 
 ```toml
 [dependencies]
-mc_protocol = { version = "2.0.0", default-features = false }
+mc_protocol = { version = "2.0.2", features = ["encryption"] }
+```
+
+To disable all optional features:
+
+```toml
+[dependencies]
+mc_protocol = { version = "2.0.1", default-features = false }
 ```
 
 ## Feature Flags
 
-| Feature       | Description              | Default |
-| ------------- | ------------------------ | ------- |
-| `async`       | Async I/O via Tokio      | enabled |
-| `encryption`  | AES-128-CFB8 via OpenSSL | enabled |
-| `compression` | Zlib via flate2          | enabled |
+| Feature       | Description              | Default  |
+| ------------- | ------------------------ | -------- |
+| `async`       | Async I/O via Tokio      | enabled  |
+| `encryption`  | AES-128-CFB8 via OpenSSL | disabled |
+| `compression` | Zlib via flate2          | enabled  |
 
 ## Usage
 
