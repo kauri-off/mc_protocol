@@ -15,20 +15,21 @@
 //!
 //! ```toml
 //! [dependencies]
-//! mc_protocol = { version = "2.0.3", features = ["encryption"] }
+//! mc_protocol = { version = "2.1.0", features = ["encryption"] }
 //! ```
 //!
 //! To disable all default features:
 //!
 //! ```toml
 //! [dependencies]
-//! mc_protocol = { version = "2.0.3", default-features = false }
+//! mc_protocol = { version = "2.1.0", default-features = false }
 //! ```
 //!
 //! ## Modules
 //!
 //! | Module | Contents |
 //! |--------|----------|
+//! | [`prelude`] | Re-exports of the most commonly used types and traits |
 //! | [`varint`] | [`VarInt`](varint::VarInt) and [`VarLong`](varint::VarLong) |
 //! | [`ser`] | [`Serialize`](ser::Serialize) and [`Deserialize`](ser::Deserialize) traits, all primitive impls, [`RawBytes`](ser::RawBytes) |
 //! | [`packet`] | [`RawPacket`](packet::RawPacket) and [`UncompressedPacket`](packet::UncompressedPacket) framing |
@@ -206,6 +207,7 @@ pub use mc_protocol_derive::*;
 
 pub mod num;
 pub mod packet;
+pub mod prelude;
 pub mod ser;
 pub mod varint;
 
