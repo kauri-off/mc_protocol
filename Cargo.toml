@@ -1,6 +1,6 @@
 [package]
 name = "mc_protocol"
-version = "2.0.2"
+version = "2.0.3"
 edition = "2021"
 authors = ["kauri-off"]
 description = "Rust implementation of Minecraft Java Edition protocol primitives: serialization, packet framing, encryption, and compression"
@@ -8,6 +8,9 @@ license = "MIT"
 repository = "https://github.com/kauri-off/mc_protocol"
 keywords = ["minecraft", "protocol", "networking", "varint", "encryption"]
 categories = ["network-programming", "encoding", "game-development"]
+
+[package.metadata.docs.rs]
+all-features = true
 
 [features]
 default = ["async", "compression"]

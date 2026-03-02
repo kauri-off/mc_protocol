@@ -10,27 +10,6 @@ Rust implementation of the Minecraft Java Edition network protocol primitives: s
 - Zlib packet compression with configurable threshold.
 - `#[derive(Packet)]` macro to generate `Serialize`, `Deserialize`, and `PacketId` for packet structs.
 
-## Installation
-
-```toml
-[dependencies]
-mc_protocol = "2.0.2"
-```
-
-To enable encryption:
-
-```toml
-[dependencies]
-mc_protocol = { version = "2.0.2", features = ["encryption"] }
-```
-
-To disable all optional features:
-
-```toml
-[dependencies]
-mc_protocol = { version = "2.0.1", default-features = false }
-```
-
 ## Feature Flags
 
 | Feature       | Description              | Default  |
