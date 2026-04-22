@@ -1,6 +1,6 @@
 [package]
 name = "mc_protocol"
-version = "2.1.0"
+version = "2.1.1"
 edition = "2021"
 authors = ["kauri-off"]
 description = "Rust implementation of Minecraft Java Edition protocol primitives: serialization, packet framing, encryption, and compression"
@@ -23,19 +23,19 @@ compression = ["dep:flate2"]
 
 [dependencies]
 thiserror = "2.0.18"
-uuid = { version = "1.21.0", features = ["v4"] }
+uuid = { version = "1.23.1", features = ["v4"] }
 
-tokio = { version = "1.49.0", features = ["full"], optional = true }
-openssl = { version = "0.10.75", optional = true }
+tokio = { version = "1.52.1", features = ["full"], optional = true }
+openssl = { version = "0.10.78", optional = true }
 flate2 = { version = "1.1.9", optional = true }
 
-mc_protocol_derive = { path = "./mc_protocol_derive", version = "2.0.0" }
+mc_protocol_derive = { path = "./mc_protocol_derive", version = "2.0.1" }
 
 [target.'cfg(windows)'.dependencies]
-openssl = { version = "0.10.75", features = ["vendored"], optional = true }
+openssl = { version = "0.10.78", features = ["vendored"], optional = true }
 
 [dev-dependencies]
-tokio = { version = "1.49.0", features = ["full"] }
+tokio = { version = "1.52.1", features = ["full"] }
 
 [[test]]
 name = "varint"

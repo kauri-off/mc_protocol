@@ -1,6 +1,6 @@
 [package]
 name = "mc_protocol_derive"
-version = "2.0.0"
+version = "2.0.1"
 edition = "2021"
 description = "Proc-macro derive crate for mc_protocol — Minecraft Java Edition protocol serialization"
 license = "MIT"
@@ -10,6 +10,6 @@ repository = "https://github.com/kauri-off/mc_protocol"
 proc-macro = true
 
 [dependencies]
-syn = { version = "2", features = ["full"] }
-quote = "1"
-proc-macro2 = "1"
+syn = { version = "2.0.117", features = ["full"] }
+quote = "1.0.45"
+proc-macro2 = "1.0.106"

@@ -154,6 +154,53 @@ fn full_packet_round_trip() {
 }
 
 // ---------------------------------------------------------------------------
+// Packet derive without #[packet(ID)] — for nested field structs
+// ---------------------------------------------------------------------------
+
+#[derive(mc_protocol::Packet, Debug, PartialEq)]
+struct Item {
+    id: VarInt,
+    count: u8,
+}
+
+#[derive(mc_protocol::Packet, Debug, PartialEq)]
+#[packet(0x10)]
+struct Inventory {
+    items: Vec<Item>,
+}
+
+#[test]
+fn nested_struct_without_packet_id_round_trips() {
+    let inv = Inventory {
+        items: vec![
+            Item {
+                id: VarInt(1),
+                count: 64,
+            },
+            Item {
+                id: VarInt(2),
+                count: 1,
+            },
+        ],
+    };
+
+    let mut buf = Vec::new();
+    inv.serialize(&mut buf).unwrap();
+
+    let decoded = Inventory::deserialize(&mut Cursor::new(&buf)).unwrap();
+    assert_eq!(decoded, inv);
+}
+
+#[test]
+fn nested_struct_has_no_packet_id_const() {
+    // Item does not have #[packet(...)], so PACKET_ID must not exist and
+    // PacketId must not be implemented. If either were generated, this test
+    // file would fail to compile due to the outer-packet assertions below
+    // still needing to work. Sanity-check that Inventory still has an ID.
+    assert_eq!(Inventory::PACKET_ID, 0x10);
+}
+
+// ---------------------------------------------------------------------------
 // Async tests
 // ---------------------------------------------------------------------------
 

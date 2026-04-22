@@ -53,9 +53,11 @@
 //!
 //! ## Derive macro
 //!
-//! `#[derive(Packet)]` generates [`Serialize`](ser::Serialize), [`Deserialize`](ser::Deserialize),
-//! and [`PacketId`](packet::PacketId) for a struct, plus an associated `PACKET_ID: i32` constant.
-//! The `#[packet(ID)]` attribute is required and sets the numeric packet ID.
+//! `#[derive(Packet)]` generates [`Serialize`](ser::Serialize) and [`Deserialize`](ser::Deserialize)
+//! for a struct. When `#[packet(ID)]` is also present it additionally generates an
+//! associated `PACKET_ID: i32` constant and a [`PacketId`](packet::PacketId) impl.
+//! The attribute is optional — omit it for nested/helper structs that appear inside
+//! another packet's fields (e.g. `Vec<T>`) and only need serialization.
 //!
 //! ```rust
 //! use mc_protocol::{Packet, varint::VarInt};

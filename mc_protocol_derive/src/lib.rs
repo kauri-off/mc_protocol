@@ -14,11 +14,16 @@ use syn::{parse_macro_input, Data, DeriveInput, Expr, Fields};
 ///
 /// # Attributes
 ///
-/// - `#[packet(0x00)]` — sets the packet ID (required)
+/// - `#[packet(0x00)]` — sets the packet ID (optional; omit for nested/helper
+///   structs that appear inside another packet's fields and only need
+///   `Serialize`/`Deserialize`). When present, the derive also generates a
+///   `PACKET_ID: i32` associated const and a [`PacketId`] impl.
 /// - `#[packet_field(optional)]` — marks a field as `Option<T>` encoded with a presence boolean
 /// - `#[packet_field(prefixed_array)]` — marks a field as `Vec<T>` encoded with a VarInt length prefix
 ///
-/// # Example
+/// # Examples
+///
+/// A top-level packet with an ID:
 ///
 /// ```ignore
 /// #[derive(Packet, Debug)]
@@ -28,6 +33,22 @@ use syn::{parse_macro_input, Data, DeriveInput, Expr, Fields};
 ///     server_address: String,
 ///     server_port: u16,
 ///     next_state: VarInt,
+/// }
+/// ```
+///
+/// A nested field struct without an ID, used inside another packet's `Vec<T>`:
+///
+/// ```ignore
+/// #[derive(Packet, Debug)]
+/// struct Item {
+///     id: VarInt,
+///     count: u8,
+/// }
+///
+/// #[derive(Packet, Debug)]
+/// #[packet(0x10)]
+/// struct Inventory {
+///     items: Vec<Item>,
 /// }
 /// ```
 #[proc_macro_derive(Packet, attributes(packet, packet_field))]
@@ -42,7 +63,8 @@ pub fn derive_packet(input: TokenStream) -> TokenStream {
 fn expand_packet(input: &DeriveInput) -> syn::Result<TokenStream2> {
     let struct_name = &input.ident;
 
-    // Extract packet ID from #[packet(ID)] attribute
+    // Extract packet ID from #[packet(ID)] attribute — absent is allowed for
+    // nested helper structs that only need Serialize/Deserialize.
     let packet_id_expr = extract_packet_id(input)?;
 
     let fields = match &input.data {
@@ -87,11 +109,23 @@ fn expand_packet(input: &DeriveInput) -> syn::Result<TokenStream2> {
         })
         .collect();
 
-    let expanded = quote! {
-        impl #struct_name {
-            /// The numeric ID that identifies this packet on the wire.
-            pub const PACKET_ID: i32 = #packet_id_expr as i32;
+    let packet_id_impls = packet_id_expr.map(|expr| {
+        quote! {
+            impl #struct_name {
+                /// The numeric ID that identifies this packet on the wire.
+                pub const PACKET_ID: i32 = #expr as i32;
+            }
+
+            impl mc_protocol::packet::PacketId for #struct_name {
+                fn packet_id(&self) -> i32 {
+                    Self::PACKET_ID
+                }
+            }
         }
+    });
+
+    let expanded = quote! {
+        #packet_id_impls
 
         impl mc_protocol::ser::Serialize for #struct_name {
             fn serialize<W: std::io::Write + Unpin>(
@@ -112,26 +146,17 @@ fn expand_packet(input: &DeriveInput) -> syn::Result<TokenStream2> {
                 })
             }
         }
-
-        impl mc_protocol::packet::PacketId for #struct_name {
-            fn packet_id(&self) -> i32 {
-                Self::PACKET_ID
-            }
-        }
     };
 
     Ok(expanded)
 }
 
-fn extract_packet_id(input: &DeriveInput) -> syn::Result<Expr> {
+fn extract_packet_id(input: &DeriveInput) -> syn::Result<Option<Expr>> {
     for attr in &input.attrs {
         if attr.path().is_ident("packet") {
             let expr: Expr = attr.parse_args()?;
-            return Ok(expr);
+            return Ok(Some(expr));
         }
     }
-    Err(syn::Error::new_spanned(
-        &input.ident,
-        "Expected #[packet(ID)] attribute with a packet ID, e.g. #[packet(0x00)]",
-    ))
+    Ok(None)
 }
