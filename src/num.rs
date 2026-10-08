@@ -30,8 +30,8 @@ macro_rules! impl_integer {
 
             #[inline]
             fn from_bytes(bytes: &[u8]) -> Self {
-                let arr: [u8; std::mem::size_of::<$t>()] = bytes.try_into()
-                    .expect("byte slice has wrong length");
+                let arr: [u8; std::mem::size_of::<$t>()] =
+                    bytes.try_into().expect("byte slice has wrong length");
                 <$t>::from_be_bytes(arr)
             }
 

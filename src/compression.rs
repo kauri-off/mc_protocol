@@ -16,7 +16,7 @@
 //! assert_eq!(&decompressed, data);
 //! ```
 
-use flate2::{read::ZlibDecoder, write::ZlibEncoder, Compression};
+use flate2::{Compression, read::ZlibDecoder, write::ZlibEncoder};
 use std::io::{Read, Write};
 use thiserror::Error;
 

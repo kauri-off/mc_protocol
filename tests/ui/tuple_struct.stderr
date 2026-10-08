@@ -1,0 +1,5 @@
+error: Packet can only be derived for structs with named fields
+ --> tests/ui/tuple_struct.rs:2:8
+  |
+2 | struct Tuple(u8);
+  |        ^^^^^

@@ -1,0 +1,5 @@
+error: Packet can only be derived for structs
+ --> tests/ui/enum.rs:2:6
+  |
+2 | enum NotAStruct {
+  |      ^^^^^^^^^^

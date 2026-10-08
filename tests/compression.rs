@@ -129,6 +129,35 @@ fn uncompress_mismatched_data_length_is_rejected() {
 }
 
 #[test]
+fn negative_threshold_disables_compression_framing() {
+    let up = UncompressedPacket::new(0x10, vec![0u8; 512]);
+    let raw = up.to_raw_packet_compressed(Some(-1)).unwrap();
+    assert_eq!(raw.data, up.to_raw_packet().unwrap().data);
+    let decoded = raw.uncompress(Some(-1)).unwrap();
+    assert_eq!(decoded.payload, up.payload);
+}
+
+#[test]
+fn packet_inflating_past_frame_limit_round_trips() {
+    use mc_protocol::packet::MAX_PACKET_LENGTH;
+
+    let up = UncompressedPacket::new(0x27, vec![0u8; MAX_PACKET_LENGTH * 2]);
+    let raw = up.to_raw_packet_compressed(Some(256)).unwrap();
+    assert!(raw.data.len() <= MAX_PACKET_LENGTH);
+    let decoded = raw.uncompress(Some(256)).unwrap();
+    assert_eq!(decoded.payload.len(), up.payload.len());
+}
+
+#[test]
+fn packet_above_uncompressed_limit_is_rejected() {
+    use mc_protocol::packet::{MAX_UNCOMPRESSED_LENGTH, PacketError};
+
+    let up = UncompressedPacket::new(0x27, vec![0u8; MAX_UNCOMPRESSED_LENGTH]);
+    let err = up.to_raw_packet_compressed(Some(256)).unwrap_err();
+    assert!(matches!(err, PacketError::InvalidLength(_)));
+}
+
+#[test]
 fn compress_level_out_of_range_is_clamped() {
     let data = b"clamped level test data";
     // Level 99 must behave like level 9 rather than panicking or erroring

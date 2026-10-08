@@ -8,7 +8,7 @@
 //! | Feature | Description | Default |
 //! |---------|-------------|---------|
 //! | `async` | Async I/O via Tokio | yes |
-//! | `encryption` | AES-128-CFB8 encryption via OpenSSL | no |
+//! | `encryption` | AES-128-CFB8 encryption (pure Rust, RustCrypto) | no |
 //! | `compression` | Zlib packet compression via flate2 | yes |
 //!
 //! To opt in to the `encryption` feature:
@@ -138,10 +138,11 @@
 //! ### Async (requires `async` feature)
 //!
 //! ```rust,no_run
+//! # #[cfg(feature = "async")]
+//! # #[tokio::main] async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! use mc_protocol::packet::{RawPacket, UncompressedPacket};
 //! use tokio::net::TcpStream;
 //!
-//! # #[tokio::main] async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let mut stream = TcpStream::connect("127.0.0.1:25565").await?;
 //!
 //! let raw = RawPacket::read_async(&mut stream).await?;
@@ -150,6 +151,7 @@
 //! let up = UncompressedPacket::new(0x00, vec![0x00]);
 //! up.write_async(&mut stream).await?;
 //! # Ok(()) }
+//! # #[cfg(not(feature = "async"))] fn main() {}
 //! ```
 //!
 //! ## Compression (requires `compression` feature)
@@ -176,7 +178,8 @@
 //!
 //! ### Sync wrappers
 //!
-//! ```rust,no_run
+//! ```rust
+//! # #[cfg(feature = "encryption")] fn main() {
 //! use mc_protocol::encryption::{Cfb8Encryptor, Cfb8Decryptor};
 //!
 //! let key: [u8; 16] = [0u8; 16]; // replace with negotiated shared secret
@@ -186,6 +189,8 @@
 //! let ciphertext = enc.encrypt(b"packet data").unwrap();
 //! let plaintext = dec.decrypt(&ciphertext).unwrap();
 //! assert_eq!(plaintext, b"packet data");
+//! # }
+//! # #[cfg(not(feature = "encryption"))] fn main() {}
 //! ```
 //!
 //! For transparent stream encryption, wrap a `Read`/`Write` with
@@ -194,20 +199,21 @@
 //! ### Async stream (requires `async` + `encryption` features)
 //!
 //! ```rust,no_run
+//! # #[cfg(all(feature = "async", feature = "encryption"))]
+//! # #[tokio::main] async fn main() -> std::io::Result<()> {
 //! use mc_protocol::encryption::Cfb8Stream;
 //! use tokio::net::TcpStream;
 //!
-//! # #[tokio::main] async fn main() -> std::io::Result<()> {
 //! let stream = TcpStream::connect("127.0.0.1:25565").await?;
 //! let key: [u8; 16] = [0u8; 16];
 //!
 //! let mut encrypted = Cfb8Stream::new_from_tcp(stream, &key)?;
 //! // All I/O through `encrypted` is transparently encrypted/decrypted
 //! # Ok(()) }
+//! # #[cfg(not(all(feature = "async", feature = "encryption")))] fn main() {}
 //! ```
 
-#![forbid(unsafe_code)]
-#![warn(missing_docs)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub use mc_protocol_derive::*;
 

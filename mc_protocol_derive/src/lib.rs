@@ -3,12 +3,11 @@
 //! Provides `#[derive(Packet)]` which automatically generates
 //! `Serialize`, `Deserialize`, and packet framing helpers for structs.
 
-extern crate proc_macro;
-
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
-use syn::{parse_macro_input, parse_quote, Data, DeriveInput, Expr, Fields};
+use quote::{quote, quote_spanned};
+use syn::spanned::Spanned;
+use syn::{Data, DeriveInput, Expr, Fields, parse_macro_input, parse_quote};
 
 /// Derives `Packet` behaviour for a struct.
 ///
@@ -17,7 +16,7 @@ use syn::{parse_macro_input, parse_quote, Data, DeriveInput, Expr, Fields};
 /// - `#[packet(0x00)]` — sets the packet ID (optional; omit for nested/helper
 ///   structs that appear inside another packet's fields and only need
 ///   `Serialize`/`Deserialize`). When present, the derive also generates a
-///   `PACKET_ID: i32` associated const and a [`PacketId`] impl.
+///   `PACKET_ID: i32` associated const and a `PacketId` impl.
 ///
 /// `Option<T>` fields are encoded with a boolean presence flag and `Vec<T>`
 /// fields with a VarInt length prefix automatically — no field attribute is
@@ -76,14 +75,14 @@ fn expand_packet(input: &DeriveInput) -> syn::Result<TokenStream2> {
                 return Err(syn::Error::new_spanned(
                     struct_name,
                     "Packet can only be derived for structs with named fields",
-                ))
+                ));
             }
         },
         _ => {
             return Err(syn::Error::new_spanned(
                 struct_name,
                 "Packet can only be derived for structs",
-            ))
+            ));
         }
     };
 
@@ -93,9 +92,10 @@ fn expand_packet(input: &DeriveInput) -> syn::Result<TokenStream2> {
     // Build serialize calls per field
     let serialize_calls: Vec<_> = field_idents
         .iter()
-        .map(|ident| {
-            quote! {
-                mc_protocol::ser::Serialize::serialize(&self.#ident, __writer)?;
+        .zip(field_types.iter())
+        .map(|(ident, ty)| {
+            quote_spanned! {ty.span()=>
+                <#ty as ::mc_protocol::ser::Serialize>::serialize(&self.#ident, __writer)?;
             }
         })
         .collect();
@@ -106,7 +106,7 @@ fn expand_packet(input: &DeriveInput) -> syn::Result<TokenStream2> {
         .zip(field_types.iter())
         .map(|(ident, ty)| {
             quote! {
-                #ident: <#ty as mc_protocol::ser::Deserialize>::deserialize(__reader)?,
+                #ident: <#ty as ::mc_protocol::ser::Deserialize>::deserialize(__reader)?,
             }
         })
         .collect();
@@ -117,13 +117,13 @@ fn expand_packet(input: &DeriveInput) -> syn::Result<TokenStream2> {
 
     let ser_generics = add_trait_bounds(
         input.generics.clone(),
-        parse_quote!(mc_protocol::ser::Serialize),
+        parse_quote!(::mc_protocol::ser::Serialize),
     );
     let (ser_impl_generics, _, ser_where_clause) = ser_generics.split_for_impl();
 
     let de_generics = add_trait_bounds(
         input.generics.clone(),
-        parse_quote!(mc_protocol::ser::Deserialize),
+        parse_quote!(::mc_protocol::ser::Deserialize),
     );
     let (de_impl_generics, _, de_where_clause) = de_generics.split_for_impl();
 
@@ -134,7 +134,8 @@ fn expand_packet(input: &DeriveInput) -> syn::Result<TokenStream2> {
                 pub const PACKET_ID: i32 = #expr as i32;
             }
 
-            impl #impl_generics mc_protocol::packet::PacketId for #struct_name #ty_generics #where_clause {
+            #[automatically_derived]
+            impl #impl_generics ::mc_protocol::packet::PacketId for #struct_name #ty_generics #where_clause {
                 fn packet_id(&self) -> i32 {
                     Self::PACKET_ID
                 }
@@ -145,21 +146,23 @@ fn expand_packet(input: &DeriveInput) -> syn::Result<TokenStream2> {
     let expanded = quote! {
         #packet_id_impls
 
-        impl #ser_impl_generics mc_protocol::ser::Serialize for #struct_name #ty_generics #ser_where_clause {
-            fn serialize<W: std::io::Write + Unpin>(
+        #[automatically_derived]
+        impl #ser_impl_generics ::mc_protocol::ser::Serialize for #struct_name #ty_generics #ser_where_clause {
+            fn serialize<W: ::std::io::Write + ::core::marker::Unpin>(
                 &self,
                 __writer: &mut W,
-            ) -> Result<(), mc_protocol::ser::SerializationError> {
+            ) -> ::core::result::Result<(), ::mc_protocol::ser::SerializationError> {
                 #(#serialize_calls)*
-                Ok(())
+                ::core::result::Result::Ok(())
             }
         }
 
-        impl #de_impl_generics mc_protocol::ser::Deserialize for #struct_name #ty_generics #de_where_clause {
-            fn deserialize<R: std::io::Read + Unpin>(
+        #[automatically_derived]
+        impl #de_impl_generics ::mc_protocol::ser::Deserialize for #struct_name #ty_generics #de_where_clause {
+            fn deserialize<R: ::std::io::Read + ::core::marker::Unpin>(
                 __reader: &mut R,
-            ) -> Result<Self, mc_protocol::ser::SerializationError> {
-                Ok(Self {
+            ) -> ::core::result::Result<Self, ::mc_protocol::ser::SerializationError> {
+                ::core::result::Result::Ok(Self {
                     #(#deserialize_calls)*
                 })
             }
@@ -180,11 +183,17 @@ fn add_trait_bounds(mut generics: syn::Generics, bound: syn::TypeParamBound) -> 
 }
 
 fn extract_packet_id(input: &DeriveInput) -> syn::Result<Option<Expr>> {
+    let mut id = None;
     for attr in &input.attrs {
         if attr.path().is_ident("packet") {
-            let expr: Expr = attr.parse_args()?;
-            return Ok(Some(expr));
+            if id.is_some() {
+                return Err(syn::Error::new_spanned(
+                    attr,
+                    "duplicate #[packet] attribute",
+                ));
+            }
+            id = Some(attr.parse_args::<Expr>()?);
         }
     }
-    Ok(None)
+    Ok(id)
 }

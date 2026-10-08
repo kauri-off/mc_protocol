@@ -9,14 +9,16 @@ Rust implementation of the Minecraft Java Edition network protocol primitives: s
 - AES-128-CFB8 stream encryption (sync and async wrappers).
 - Zlib packet compression with configurable threshold.
 - `#[derive(Packet)]` macro to generate `Serialize`, `Deserialize`, and `PacketId` for packet structs (generic structs supported).
-- Hardened against malicious input: incoming frames are capped at `MAX_PACKET_LENGTH` (2 MiB, the protocol's 3-byte VarInt limit), declared string/array lengths are validated before allocating, and decompression is bounded by the declared size (zip-bomb guard).
+- Hardened against malicious input: incoming frames are capped at `MAX_PACKET_LENGTH` (2 MiB, the protocol's 3-byte VarInt limit), declared string/array lengths are validated before allocating, and decompression is bounded by the declared size and `MAX_UNCOMPRESSED_LENGTH` (8 MiB, vanilla's limit; zip-bomb guard).
+
+Minimum supported Rust version: **1.89**.
 
 ## Feature Flags
 
 | Feature       | Description              | Default  |
 | ------------- | ------------------------ | -------- |
 | `async`       | Async I/O via Tokio      | enabled  |
-| `encryption`  | AES-128-CFB8 via OpenSSL | disabled |
+| `encryption`  | AES-128-CFB8 via RustCrypto (pure Rust) | disabled |
 | `compression` | Zlib via flate2          | enabled  |
 
 ## Usage

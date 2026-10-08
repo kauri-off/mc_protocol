@@ -1,64 +1,78 @@
-[package]
-name = "mc_protocol"
-version = "2.2.0"
-edition = "2021"
+[workspace]
+members = ["mc_protocol_derive"]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.89"
 authors = ["kauri-off"]
-description = "Rust implementation of Minecraft Java Edition protocol primitives: serialization, packet framing, encryption, and compression"
 license = "MIT"
 repository = "https://github.com/kauri-off/mc_protocol"
+
+[workspace.dependencies]
+mc_protocol_derive = { path = "./mc_protocol_derive", version = "2.0.3" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
+
+[package]
+name = "mc_protocol"
+version = "2.3.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rust implementation of Minecraft Java Edition protocol primitives: serialization, packet framing, encryption, and compression"
 keywords = ["minecraft", "protocol", "networking", "varint", "encryption"]
 categories = ["network-programming", "encoding", "game-development"]
+include = ["src/**", "README.md", "LICENSE"]
 
 [package.metadata.docs.rs]
 all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true
 
 [features]
 default = ["async", "compression"]
 # Enable async I/O via tokio
 async = ["dep:tokio"]
-# Enable AES-128-CFB8 encryption support
-encryption = ["dep:openssl"]
+# Enable AES-128-CFB8 encryption support (pure Rust, RustCrypto)
+encryption = ["dep:aes", "dep:cfb8"]
 # Enable zlib packet compression support
 compression = ["dep:flate2"]
 
 [dependencies]
-thiserror = "2.0.18"
-uuid = { version = "1.23.3", features = ["v4"] }
+mc_protocol_derive.workspace = true
+thiserror = "2.0.21"
+uuid = "1.27.0"
 
-tokio = { version = "1.52.3", features = ["full"], optional = true }
-openssl = { version = "0.10.80", optional = true }
-flate2 = { version = "1.1.9", optional = true }
-
-mc_protocol_derive = { path = "./mc_protocol_derive", version = "2.0.2" }
-
-[target.'cfg(windows)'.dependencies]
-openssl = { version = "0.10.80", features = ["vendored"], optional = true }
+tokio = { version = "1.53.2", features = ["io-util", "net"], optional = true }
+aes = { version = "0.9.3", optional = true }
+cfb8 = { version = "0.9.1", optional = true }
+flate2 = { version = "1.1.10", optional = true }
 
 [dev-dependencies]
-tokio = { version = "1.52.3", features = ["full"] }
-
-[[test]]
-name = "varint"
-path = "tests/varint.rs"
-
-[[test]]
-name = "varlong"
-path = "tests/varlong.rs"
-
-[[test]]
-name = "types"
-path = "tests/types.rs"
-
-[[test]]
-name = "packet"
-path = "tests/packet.rs"
+proptest = "1.11.0"
+tokio = { version = "1.53.2", features = ["full"] }
+trybuild = "1.0.122"
+uuid = { version = "1.27.0", features = ["v4"] }
 
 [[test]]
 name = "encryption"
-path = "tests/encryption.rs"
 required-features = ["encryption"]
 
 [[test]]
 name = "compression"
-path = "tests/compression.rs"
 required-features = ["compression"]

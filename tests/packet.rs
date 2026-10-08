@@ -1,6 +1,8 @@
 //! Tests for packet framing and the derive macro.
 
-use mc_protocol::packet::{PacketError, PacketId, RawPacket, UncompressedPacket, MAX_PACKET_LENGTH};
+use mc_protocol::packet::{
+    MAX_PACKET_LENGTH, PacketError, PacketId, RawPacket, UncompressedPacket,
+};
 use mc_protocol::ser::{Deserialize, Serialize};
 use mc_protocol::varint::VarInt;
 use std::io::Cursor;
@@ -126,9 +128,41 @@ fn raw_packet_oversized_length_is_rejected() {
     // Declares a frame larger than the protocol maximum (2^21 - 1). Must be
     // rejected up front instead of allocating gigabytes.
     let mut buf = Vec::new();
-    VarInt(MAX_PACKET_LENGTH as i32 + 1).serialize(&mut buf).unwrap();
+    VarInt(MAX_PACKET_LENGTH as i32 + 1)
+        .serialize(&mut buf)
+        .unwrap();
     let err = RawPacket::read_sync(&mut Cursor::new(&buf)).unwrap_err();
     assert!(matches!(err, PacketError::InvalidLength(_)));
+}
+
+#[test]
+fn raw_packet_oversized_frame_is_not_written() {
+    let raw = RawPacket::new(vec![0; MAX_PACKET_LENGTH + 1]);
+    let mut buf = Vec::new();
+    let err = raw.write_sync(&mut buf).unwrap_err();
+    assert!(matches!(err, PacketError::InvalidLength(_)));
+    assert!(buf.is_empty());
+}
+
+mod user_result_alias {
+    #[allow(dead_code)]
+    type Result<T> = std::result::Result<T, String>;
+
+    #[derive(mc_protocol::Packet, Debug, PartialEq)]
+    #[packet(0x01)]
+    pub(super) struct Ping {
+        pub(super) id: i64,
+    }
+}
+
+#[test]
+fn derive_works_with_shadowed_result_alias() {
+    let mut buf = Vec::new();
+    user_result_alias::Ping { id: 7 }
+        .serialize(&mut buf)
+        .unwrap();
+    let back = user_result_alias::Ping::deserialize(&mut Cursor::new(&buf)).unwrap();
+    assert_eq!(back, user_result_alias::Ping { id: 7 });
 }
 
 #[test]

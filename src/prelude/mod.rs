@@ -25,7 +25,7 @@
 //! AES-128-CFB8 types.
 
 // --- Core serialization ---
-pub use crate::ser::{Deserialize, RawBytes, Serialize, SerializationError};
+pub use crate::ser::{Deserialize, RawBytes, SerializationError, Serialize};
 
 // --- Variable-length integers ---
 pub use crate::varint::{VarInt, VarLong};
@@ -39,7 +39,7 @@ pub use mc_protocol_derive::Packet;
 // --- Compression helpers (requires `compression` feature) ---
 #[cfg(feature = "compression")]
 pub use crate::compression::{
-    compress_zlib, compress_zlib_level, decompress_zlib, CompressionError,
+    CompressionError, compress_zlib, compress_zlib_level, decompress_zlib,
 };
 
 // --- Sync encryption (requires `encryption` feature) ---

@@ -1,0 +1,43 @@
+error[E0277]: the trait bound `Opaque: Serialize` is not satisfied
+ --> tests/ui/non_serializable_field.rs:5:12
+  |
+5 |     inner: Opaque,
+  |            ^^^^^^ unsatisfied trait bound
+  |
+help: the trait `Serialize` is not implemented for `Opaque`
+ --> tests/ui/non_serializable_field.rs:1:1
+  |
+1 | struct Opaque;
+  | ^^^^^^^^^^^^^
+  = help: the following other types implement trait `Serialize`:
+            HasOpaque
+            Option<T>
+            RawBytes
+            String
+            VarLong
+            Vec<T>
+            bool
+            f32
+          and $N others
+
+error[E0277]: the trait bound `Opaque: Deserialize` is not satisfied
+ --> tests/ui/non_serializable_field.rs:5:12
+  |
+5 |     inner: Opaque,
+  |            ^^^^^^ unsatisfied trait bound
+  |
+help: the trait `Deserialize` is not implemented for `Opaque`
+ --> tests/ui/non_serializable_field.rs:1:1
+  |
+1 | struct Opaque;
+  | ^^^^^^^^^^^^^
+  = help: the following other types implement trait `Deserialize`:
+            HasOpaque
+            Option<T>
+            String
+            VarLong
+            Vec<T>
+            bool
+            f32
+            f64
+          and $N others

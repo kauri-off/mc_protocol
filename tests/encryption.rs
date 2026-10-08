@@ -102,6 +102,41 @@ fn stateful_byte_by_byte_decryption_matches_bulk() {
 }
 
 #[test]
+fn matches_openssl_known_answer() {
+    // openssl enc -aes-128-cfb8 -K 000102..0f -iv 000102..0f
+    let key: [u8; 16] = std::array::from_fn(|i| i as u8);
+    let plaintext = b"Hello, Minecraft protocol! CFB8 known-answer test.";
+    let expected: Vec<u8> = (0..100)
+        .step_by(2)
+        .map(|i| {
+            u8::from_str_radix(
+                &"42ea5ed4daf864eae7ef5c17728310d5ecaf34e37de59a5240e722d18c3c1cfa7bad3f2a3da9ab073caf0b67aec2cfc1824b"[i..i + 2],
+                16,
+            )
+            .unwrap()
+        })
+        .collect();
+
+    let ciphertext = Cfb8Encryptor::new(&key)
+        .unwrap()
+        .encrypt(plaintext)
+        .unwrap();
+    assert_eq!(ciphertext, expected);
+    let decrypted = Cfb8Decryptor::new(&key)
+        .unwrap()
+        .decrypt(&ciphertext)
+        .unwrap();
+    assert_eq!(decrypted, plaintext);
+}
+
+#[test]
+fn ciphers_are_send_and_sync() {
+    fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<Cfb8Encryptor>();
+    assert_send_sync::<Cfb8Decryptor>();
+}
+
+#[test]
 fn different_keys_produce_different_ciphertexts() {
     let key1 = b"key_one_xxxxxxxx";
     let key2 = b"key_two_xxxxxxxx";
@@ -263,8 +298,7 @@ mod async_tests {
     async fn async_write_half_survives_backpressure_and_partial_writes() {
         let plaintext = b"Backpressure must not corrupt the encrypted stream";
 
-        let mut write_half =
-            AsyncCfb8WriteHalf::new(BackpressuredWriter::new(), TEST_KEY).unwrap();
+        let mut write_half = AsyncCfb8WriteHalf::new(BackpressuredWriter::new(), TEST_KEY).unwrap();
         // Write in small chunks to interleave encryption with backpressure
         for chunk in plaintext.chunks(7) {
             write_half.write_all(chunk).await.unwrap();
@@ -284,8 +318,7 @@ mod async_tests {
     async fn async_write_half_flush_drains_buffer() {
         let plaintext = b"flush me";
 
-        let mut write_half =
-            AsyncCfb8WriteHalf::new(BackpressuredWriter::new(), TEST_KEY).unwrap();
+        let mut write_half = AsyncCfb8WriteHalf::new(BackpressuredWriter::new(), TEST_KEY).unwrap();
         write_half.write_all(plaintext).await.unwrap();
         write_half.flush().await.unwrap();
 

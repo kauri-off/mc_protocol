@@ -81,7 +81,10 @@ macro_rules! impl_primitive {
     ($t:ty) => {
         impl Serialize for $t {
             #[inline]
-            fn serialize<W: Write + Unpin>(&self, writer: &mut W) -> Result<(), SerializationError> {
+            fn serialize<W: Write + Unpin>(
+                &self,
+                writer: &mut W,
+            ) -> Result<(), SerializationError> {
                 writer.write_all(&self.to_be_bytes())?;
                 Ok(())
             }
@@ -314,7 +317,7 @@ impl<T: Serialize> Serialize for Vec<T> {
 impl<T: Deserialize> Deserialize for Vec<T> {
     fn deserialize<R: Read + Unpin>(reader: &mut R) -> Result<Self, SerializationError> {
         let len = VarInt::read_sync(reader)?.0;
-        if len < 0 {
+        if len < 0 || len as usize > crate::packet::MAX_UNCOMPRESSED_LENGTH {
             return Err(SerializationError::InvalidLength(len as i64));
         }
         // Cap the pre-allocation: the length prefix is attacker-controlled,
@@ -339,7 +342,10 @@ pub struct RawBytes(pub Vec<u8>);
 
 impl RawBytes {
     /// Read exactly `n` bytes from `reader` into a `RawBytes`.
-    pub fn read_exact<R: Read + Unpin>(reader: &mut R, n: usize) -> Result<Self, SerializationError> {
+    pub fn read_exact<R: Read + Unpin>(
+        reader: &mut R,
+        n: usize,
+    ) -> Result<Self, SerializationError> {
         let mut buf = vec![0u8; n];
         reader.read_exact(&mut buf)?;
         Ok(Self(buf))

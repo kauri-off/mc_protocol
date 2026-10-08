@@ -24,17 +24,20 @@
 //! # Example (async)
 //!
 //! ```rust,no_run
+//! # #[cfg(feature = "async")]
+//! # #[tokio::main] async fn main() -> std::io::Result<()> {
 //! use tokio::net::TcpStream;
 //! use mc_protocol::encryption::Cfb8Stream;
 //!
-//! # #[tokio::main] async fn main() -> std::io::Result<()> {
 //! let stream = TcpStream::connect("127.0.0.1:25565").await?;
 //! let key = [0u8; 16];
 //! let encrypted = Cfb8Stream::new_from_tcp(stream, &key)?;
 //! # Ok(()) }
+//! # #[cfg(not(feature = "async"))] fn main() {}
 //! ```
 
-use openssl::symm::{Cipher, Crypter, Mode};
+use aes::Aes128;
+use cfb8::cipher::KeyIvInit;
 use std::io::{self, Read, Write};
 
 #[cfg(feature = "async")]
@@ -42,8 +45,8 @@ use {
     std::pin::Pin,
     std::task::{Context, Poll},
     tokio::io::{AsyncRead, AsyncWrite, ReadBuf},
-    tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf},
     tokio::net::TcpStream,
+    tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf},
 };
 
 // ---------------------------------------------------------------------------
@@ -52,54 +55,44 @@ use {
 
 /// Stateful AES-128-CFB8 encryptor.
 pub struct Cfb8Encryptor {
-    crypter: Crypter,
+    cipher: cfb8::Encryptor<Aes128>,
 }
 
 impl Cfb8Encryptor {
     /// Create a new encryptor with the given 16-byte key.
     /// The IV is the same as the key, as required by Minecraft.
     pub fn new(key: &[u8; 16]) -> io::Result<Self> {
-        let mut crypter = Crypter::new(Cipher::aes_128_cfb8(), Mode::Encrypt, key, Some(key))
-            .map_err(io::Error::other)?;
-        crypter.pad(false);
-        Ok(Self { crypter })
+        Ok(Self {
+            cipher: cfb8::Encryptor::new(&(*key).into(), &(*key).into()),
+        })
     }
 
     /// Encrypt a slice of plaintext bytes, returning the ciphertext.
     pub fn encrypt(&mut self, plaintext: &[u8]) -> io::Result<Vec<u8>> {
-        let mut output = vec![0u8; plaintext.len() + 16];
-        let n = self
-            .crypter
-            .update(plaintext, &mut output)
-            .map_err(io::Error::other)?;
-        output.truncate(n);
+        let mut output = plaintext.to_vec();
+        self.cipher.encrypt(&mut output);
         Ok(output)
     }
 }
 
 /// Stateful AES-128-CFB8 decryptor.
 pub struct Cfb8Decryptor {
-    crypter: Crypter,
+    cipher: cfb8::Decryptor<Aes128>,
 }
 
 impl Cfb8Decryptor {
     /// Create a new decryptor with the given 16-byte key.
     /// The IV is the same as the key, as required by Minecraft.
     pub fn new(key: &[u8; 16]) -> io::Result<Self> {
-        let mut crypter = Crypter::new(Cipher::aes_128_cfb8(), Mode::Decrypt, key, Some(key))
-            .map_err(io::Error::other)?;
-        crypter.pad(false);
-        Ok(Self { crypter })
+        Ok(Self {
+            cipher: cfb8::Decryptor::new(&(*key).into(), &(*key).into()),
+        })
     }
 
     /// Decrypt a slice of ciphertext bytes, returning the plaintext.
     pub fn decrypt(&mut self, ciphertext: &[u8]) -> io::Result<Vec<u8>> {
-        let mut output = vec![0u8; ciphertext.len() + 16];
-        let n = self
-            .crypter
-            .update(ciphertext, &mut output)
-            .map_err(io::Error::other)?;
-        output.truncate(n);
+        let mut output = ciphertext.to_vec();
+        self.cipher.decrypt(&mut output);
         Ok(output)
     }
 }
@@ -135,8 +128,7 @@ impl<R: Read> Read for Cfb8ReadHalf<R> {
         if n == 0 {
             return Ok(0);
         }
-        let decrypted = self.decryptor.decrypt(&buf[..n])?;
-        buf[..n].copy_from_slice(&decrypted[..n]);
+        self.decryptor.cipher.decrypt(&mut buf[..n]);
         Ok(n)
     }
 }
@@ -212,13 +204,9 @@ impl<R: AsyncRead + Unpin> AsyncRead for AsyncCfb8ReadHalf<R> {
         let poll = Pin::new(&mut self.inner).poll_read(cx, buf);
 
         if let Poll::Ready(Ok(())) = &poll {
-            let new_data = &mut buf.filled_mut()[pre_len..];
-            if !new_data.is_empty() {
-                match self.decryptor.decrypt(new_data) {
-                    Ok(decrypted) => new_data.copy_from_slice(&decrypted[..new_data.len()]),
-                    Err(e) => return Poll::Ready(Err(e)),
-                }
-            }
+            self.decryptor
+                .cipher
+                .decrypt(&mut buf.filled_mut()[pre_len..]);
         }
 
         poll
@@ -278,7 +266,7 @@ impl<W: AsyncWrite + Unpin> AsyncCfb8WriteHalf<W> {
                     return Poll::Ready(Err(io::Error::new(
                         io::ErrorKind::WriteZero,
                         "inner writer accepted zero bytes",
-                    )))
+                    )));
                 }
                 Poll::Ready(Ok(n)) => self.written += n,
                 Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
@@ -310,12 +298,9 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for AsyncCfb8WriteHalf<W> {
             return Poll::Ready(Ok(0));
         }
 
-        let encrypted = match self.encryptor.encrypt(buf) {
-            Ok(e) => e,
-            Err(e) => return Poll::Ready(Err(e)),
-        };
-        self.buffer = encrypted;
-        self.written = 0;
+        let this = &mut *self;
+        this.buffer.extend_from_slice(buf);
+        this.encryptor.cipher.encrypt(&mut this.buffer);
 
         // Opportunistically write; whatever the inner writer doesn't take now
         // stays buffered and is drained on the next write/flush/shutdown.

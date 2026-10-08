@@ -144,7 +144,7 @@ fn string_with_emoji_counts_as_two_utf16_units() {
 
 #[test]
 fn string_over_max_utf16_length_fails_to_serialize() {
-    use mc_protocol::ser::{serialize_string_with_max, SerializationError};
+    use mc_protocol::ser::{SerializationError, serialize_string_with_max};
 
     let s = "ab";
     let mut buf = Vec::new();
@@ -277,6 +277,22 @@ fn vec_huge_declared_length_fails_without_huge_allocation() {
     VarInt(i32::MAX).serialize(&mut buf).unwrap();
     let result = Vec::<u64>::deserialize(&mut Cursor::new(&buf));
     assert!(result.is_err());
+}
+
+#[test]
+fn vec_of_zero_sized_elements_rejects_huge_length() {
+    use mc_protocol::varint::VarInt;
+
+    #[derive(mc_protocol::Packet, Debug)]
+    struct Empty {}
+
+    let mut buf = Vec::new();
+    VarInt(i32::MAX).serialize(&mut buf).unwrap();
+    let err = Vec::<Empty>::deserialize(&mut Cursor::new(&buf)).unwrap_err();
+    assert!(matches!(
+        err,
+        mc_protocol::ser::SerializationError::InvalidLength(_)
+    ));
 }
 
 // ---------------------------------------------------------------------------

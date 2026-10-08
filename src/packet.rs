@@ -66,6 +66,21 @@ pub enum PacketError {
 /// malicious length prefix from triggering a multi-gigabyte allocation.
 pub const MAX_PACKET_LENGTH: usize = 2_097_151;
 
+/// Maximum `data_length` of a compressed packet (vanilla limit, 2^23 bytes).
+pub const MAX_UNCOMPRESSED_LENGTH: usize = 8_388_608;
+
+#[cfg(feature = "compression")]
+fn active_threshold(threshold: Option<i32>) -> Option<usize> {
+    threshold.and_then(|t| usize::try_from(t).ok())
+}
+
+fn checked_frame_len(len: usize) -> Result<i32, PacketError> {
+    if len > MAX_PACKET_LENGTH {
+        return Err(PacketError::InvalidLength(len as i64));
+    }
+    Ok(len as i32)
+}
+
 // ---------------------------------------------------------------------------
 // PacketId trait
 // ---------------------------------------------------------------------------
@@ -113,9 +128,9 @@ impl RawPacket {
         Ok(RawPacket { data })
     }
 
-    /// Write this packet frame to a synchronous writer (length-prefixed).
+    /// Write this packet frame to a synchronous writer; rejects frames over [`MAX_PACKET_LENGTH`].
     pub fn write_sync<W: Write>(&self, writer: &mut W) -> Result<(), PacketError> {
-        VarInt(self.data.len() as i32).write_sync(writer)?;
+        VarInt(checked_frame_len(self.data.len())?).write_sync(writer)?;
         writer.write_all(&self.data)?;
         Ok(())
     }
@@ -137,13 +152,15 @@ impl RawPacket {
         Ok(RawPacket { data })
     }
 
-    /// Write this packet frame to an async writer (requires `async` feature).
+    /// Write this packet frame to an async writer; rejects frames over [`MAX_PACKET_LENGTH`].
     #[cfg(feature = "async")]
     pub async fn write_async<W: AsyncWriteExt + Unpin>(
         &self,
         writer: &mut W,
     ) -> Result<(), PacketError> {
-        VarInt(self.data.len() as i32).write_async(writer).await?;
+        VarInt(checked_frame_len(self.data.len())?)
+            .write_async(writer)
+            .await?;
         writer.write_all(&self.data).await?;
         Ok(())
     }
@@ -167,19 +184,19 @@ impl RawPacket {
 
     /// Attempt to uncompress a compressed packet frame.
     ///
-    /// When `threshold` is `None`, the connection uses no compression and the
-    /// frame is interpreted as uncompressed. When `threshold` is `Some(_)` the
+    /// When `threshold` is `None` or negative (vanilla's "compression
+    /// disabled"), the frame is interpreted as uncompressed. Otherwise the
     /// first field is `data_length` (VarInt): if 0, the rest is uncompressed;
     /// otherwise it is the uncompressed length and the rest is zlib-deflated.
     ///
     /// Returns `Err` if decompression fails, if `data_length` is negative or
-    /// exceeds [`MAX_PACKET_LENGTH`], or if the decompressed size does not
+    /// exceeds [`MAX_UNCOMPRESSED_LENGTH`], or if the decompressed size does not
     /// match the declared `data_length` (zip-bomb guard).
     #[cfg(feature = "compression")]
     pub fn uncompress(&self, threshold: Option<i32>) -> Result<UncompressedPacket, PacketError> {
         use crate::compression::decompress_zlib_limited;
 
-        if threshold.is_none() {
+        if active_threshold(threshold).is_none() {
             return self.as_uncompressed();
         }
 
@@ -187,7 +204,7 @@ impl RawPacket {
         let data_length = VarInt::read_sync(&mut cursor)?;
         let compressed_start = cursor.position() as usize;
 
-        if data_length.0 < 0 || data_length.0 as usize > MAX_PACKET_LENGTH {
+        if data_length.0 < 0 || data_length.0 as usize > MAX_UNCOMPRESSED_LENGTH {
             return Err(PacketError::InvalidLength(data_length.0 as i64));
         }
 
@@ -270,8 +287,9 @@ impl UncompressedPacket {
 
     /// Encode into a length-prefixed, possibly-compressed frame.
     ///
-    /// When `threshold` is `None` no compression is applied. When `Some(t)`,
-    /// packets with an uncompressed length >= `t` are zlib-compressed.
+    /// When `threshold` is `None` or negative no compression framing is applied.
+    /// When `Some(t)`, packets with an uncompressed length >= `t` are
+    /// zlib-compressed.
     #[cfg(feature = "compression")]
     pub fn to_raw_packet_compressed(
         &self,
@@ -279,7 +297,7 @@ impl UncompressedPacket {
     ) -> Result<RawPacket, PacketError> {
         use crate::compression::compress_zlib;
 
-        let Some(t) = threshold else {
+        let Some(t) = active_threshold(threshold) else {
             return self.to_raw_packet();
         };
 
@@ -288,8 +306,12 @@ impl UncompressedPacket {
         VarInt(self.packet_id).write_sync(&mut inner)?;
         inner.extend_from_slice(&self.payload);
 
+        if inner.len() > MAX_UNCOMPRESSED_LENGTH {
+            return Err(PacketError::InvalidLength(inner.len() as i64));
+        }
+
         let mut frame = Vec::new();
-        if inner.len() >= t as usize {
+        if inner.len() >= t {
             // Compress
             let compressed = compress_zlib(&inner)?;
             VarInt(inner.len() as i32).write_sync(&mut frame)?;
