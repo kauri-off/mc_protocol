@@ -25,7 +25,7 @@
 //! AES-128-CFB8 types.
 
 // --- Core serialization ---
-pub use crate::ser::{Deserialize, RawBytes, SerializationError, Serialize};
+pub use crate::ser::{ByteArray, Deserialize, RawBytes, SerializationError, Serialize};
 
 // --- Variable-length integers ---
 pub use crate::varint::{VarInt, VarLong};

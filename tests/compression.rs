@@ -1,6 +1,8 @@
 //! Tests for zlib packet compression.
 
-use mc_protocol::compression::{compress_zlib, compress_zlib_level, decompress_zlib};
+use mc_protocol::compression::{
+    compress_zlib, compress_zlib_level, decompress_zlib, decompress_zlib_limited,
+};
 use mc_protocol::packet::UncompressedPacket;
 
 // ---------------------------------------------------------------------------
@@ -196,4 +198,39 @@ fn large_packet_round_trip_preserves_exact_content() {
 
     assert_eq!(decoded.payload, payload);
     assert_eq!(decoded.payload.len(), 2000);
+}
+
+#[test]
+fn into_uncompressed_matches_uncompress() {
+    let packet = UncompressedPacket::new(0x27, (0..5000u32).map(|i| i as u8).collect());
+    for threshold in [None, Some(-1), Some(0), Some(64), Some(100_000)] {
+        let raw = packet.to_raw_packet_compressed(threshold).unwrap();
+        let borrowed = raw.uncompress(threshold).unwrap();
+        let owned = raw.into_uncompressed(threshold).unwrap();
+        assert_eq!(borrowed.packet_id, 0x27);
+        assert_eq!(owned.packet_id, 0x27);
+        assert_eq!(owned.payload, packet.payload);
+        assert_eq!(borrowed.payload, packet.payload);
+    }
+}
+
+#[test]
+fn decompress_zlib_limited_rejects_truncated_stream() {
+    let data: Vec<u8> = (0..10_000u32).map(|i| (i * 7) as u8).collect();
+    let compressed = compress_zlib(&data).unwrap();
+    let truncated = &compressed[..compressed.len() / 2];
+    assert!(decompress_zlib_limited(truncated, data.len()).is_err());
+}
+
+#[test]
+fn reused_zlib_state_round_trips_repeatedly() {
+    for i in 0..50u32 {
+        let data: Vec<u8> = (0..(i * 997)).map(|j| (j ^ i) as u8).collect();
+        let compressed = compress_zlib(&data).unwrap();
+        assert_eq!(decompress_zlib(&compressed).unwrap(), data);
+        assert_eq!(
+            decompress_zlib_limited(&compressed, data.len()).unwrap(),
+            data
+        );
+    }
 }

@@ -26,7 +26,7 @@ print_stderr = "warn"
 
 [package]
 name = "mc_protocol"
-version = "2.3.0"
+version = "2.4.0"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
@@ -47,7 +47,7 @@ workspace = true
 [features]
 default = ["async", "compression"]
 # Enable async I/O via tokio
-async = ["dep:tokio"]
+async = ["dep:tokio", "dep:bytes"]
 # Enable AES-128-CFB8 encryption support (pure Rust, RustCrypto)
 encryption = ["dep:aes", "dep:cfb8"]
 # Enable zlib packet compression support
@@ -59,6 +59,7 @@ thiserror = "2.0.21"
 uuid = "1.27.0"
 
 tokio = { version = "1.53.2", features = ["io-util", "net"], optional = true }
+bytes = { version = "1.12.1", optional = true }
 aes = { version = "0.9.3", optional = true }
 cfb8 = { version = "0.9.1", optional = true }
 flate2 = { version = "1.1.10", optional = true }

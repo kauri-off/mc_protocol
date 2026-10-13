@@ -91,6 +91,22 @@ impl VarInt {
         count
     }
 
+    /// Encode into a stack buffer; returns the buffer and the number of bytes used.
+    pub fn encode(&self) -> ([u8; 5], usize) {
+        let mut buf = [0u8; 5];
+        let mut value = self.0 as u32;
+        let mut len = 0;
+        loop {
+            if value & !(SEGMENT_BITS as u32) == 0 {
+                buf[len] = value as u8;
+                return (buf, len + 1);
+            }
+            buf[len] = ((value as u8) & SEGMENT_BITS) | CONTINUE_BIT;
+            value >>= 7;
+            len += 1;
+        }
+    }
+
     // --- Synchronous I/O ---
 
     /// Decode a `VarInt` from a synchronous reader.
@@ -122,15 +138,9 @@ impl VarInt {
 
     /// Encode this `VarInt` into a synchronous writer.
     pub fn write_sync<W: Write>(&self, writer: &mut W) -> Result<(), VarIntError> {
-        let mut value = self.0 as u32;
-        loop {
-            if value & !(SEGMENT_BITS as u32) == 0 {
-                writer.write_all(&[value as u8])?;
-                return Ok(());
-            }
-            writer.write_all(&[((value as u8) & SEGMENT_BITS) | CONTINUE_BIT])?;
-            value >>= 7;
-        }
+        let (buf, len) = self.encode();
+        writer.write_all(&buf[..len])?;
+        Ok(())
     }
 
     // --- Async I/O ---
@@ -164,17 +174,9 @@ impl VarInt {
         &self,
         writer: &mut W,
     ) -> Result<(), VarIntError> {
-        let mut value = self.0 as u32;
-        loop {
-            if value & !(SEGMENT_BITS as u32) == 0 {
-                writer.write_u8(value as u8).await?;
-                return Ok(());
-            }
-            writer
-                .write_u8(((value as u8) & SEGMENT_BITS) | CONTINUE_BIT)
-                .await?;
-            value >>= 7;
-        }
+        let (buf, len) = self.encode();
+        writer.write_all(&buf[..len]).await?;
+        Ok(())
     }
 }
 
@@ -221,6 +223,22 @@ impl VarLong {
         count
     }
 
+    /// Encode into a stack buffer; returns the buffer and the number of bytes used.
+    pub fn encode(&self) -> ([u8; 10], usize) {
+        let mut buf = [0u8; 10];
+        let mut value = self.0 as u64;
+        let mut len = 0;
+        loop {
+            if value & !(SEGMENT_BITS as u64) == 0 {
+                buf[len] = value as u8;
+                return (buf, len + 1);
+            }
+            buf[len] = ((value as u8) & SEGMENT_BITS) | CONTINUE_BIT;
+            value >>= 7;
+            len += 1;
+        }
+    }
+
     // --- Synchronous I/O ---
 
     /// Decode a `VarLong` from a synchronous reader.
@@ -252,15 +270,9 @@ impl VarLong {
 
     /// Encode this `VarLong` into a synchronous writer.
     pub fn write_sync<W: Write>(&self, writer: &mut W) -> Result<(), VarIntError> {
-        let mut value = self.0 as u64;
-        loop {
-            if value & !(SEGMENT_BITS as u64) == 0 {
-                writer.write_all(&[value as u8])?;
-                return Ok(());
-            }
-            writer.write_all(&[((value as u8) & SEGMENT_BITS) | CONTINUE_BIT])?;
-            value >>= 7;
-        }
+        let (buf, len) = self.encode();
+        writer.write_all(&buf[..len])?;
+        Ok(())
     }
 
     // --- Async I/O ---
@@ -294,17 +306,9 @@ impl VarLong {
         &self,
         writer: &mut W,
     ) -> Result<(), VarIntError> {
-        let mut value = self.0 as u64;
-        loop {
-            if value & !(SEGMENT_BITS as u64) == 0 {
-                writer.write_u8(value as u8).await?;
-                return Ok(());
-            }
-            writer
-                .write_u8(((value as u8) & SEGMENT_BITS) | CONTINUE_BIT)
-                .await?;
-            value >>= 7;
-        }
+        let (buf, len) = self.encode();
+        writer.write_all(&buf[..len]).await?;
+        Ok(())
     }
 }
 

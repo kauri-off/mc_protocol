@@ -323,11 +323,52 @@ impl<T: Deserialize> Deserialize for Vec<T> {
         // Cap the pre-allocation: the length prefix is attacker-controlled,
         // so don't reserve gigabytes up front. The vector still grows to the
         // full length as elements are actually read.
-        let mut result = Vec::with_capacity((len as usize).min(4096));
+        let cap = MAX_PREALLOC_BYTES / std::mem::size_of::<T>().max(1);
+        let mut result = Vec::with_capacity((len as usize).min(cap));
         for _ in 0..len {
             result.push(T::deserialize(reader)?);
         }
         Ok(result)
+    }
+}
+
+/// Upper bound on memory reserved from an untrusted length prefix before data arrives.
+const MAX_PREALLOC_BYTES: usize = 64 * 1024;
+
+// ---------------------------------------------------------------------------
+// Prefixed byte array
+// ---------------------------------------------------------------------------
+
+/// A VarInt-length-prefixed byte array, copied in bulk.
+///
+/// Wire-compatible with `Vec<u8>`, which (de)serializes one element at a time.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ByteArray(pub Vec<u8>);
+
+impl Serialize for ByteArray {
+    fn serialize<W: Write + Unpin>(&self, writer: &mut W) -> Result<(), SerializationError> {
+        let len = i32::try_from(self.0.len())
+            .map_err(|_| SerializationError::InvalidLength(self.0.len() as i64))?;
+        VarInt(len).write_sync(writer)?;
+        writer.write_all(&self.0)?;
+        Ok(())
+    }
+}
+
+impl Deserialize for ByteArray {
+    fn deserialize<R: Read + Unpin>(reader: &mut R) -> Result<Self, SerializationError> {
+        let len = VarInt::read_sync(reader)?.0;
+        if len < 0 || len as usize > crate::packet::MAX_UNCOMPRESSED_LENGTH {
+            return Err(SerializationError::InvalidLength(len as i64));
+        }
+        let len = len as usize;
+        // Grows only as bytes actually arrive, so a lying prefix costs nothing.
+        let mut buf = Vec::with_capacity(len.min(MAX_PREALLOC_BYTES));
+        reader.take(len as u64).read_to_end(&mut buf)?;
+        if buf.len() != len {
+            return Err(io::Error::from(io::ErrorKind::UnexpectedEof).into());
+        }
+        Ok(Self(buf))
     }
 }
 
