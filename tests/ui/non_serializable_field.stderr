@@ -10,6 +10,7 @@ help: the trait `Serialize` is not implemented for `Opaque`
 1 | struct Opaque;
   | ^^^^^^^^^^^^^
   = help: the following other types implement trait `Serialize`:
+            ByteArray
             HasOpaque
             Option<T>
             RawBytes
@@ -17,7 +18,6 @@ help: the trait `Serialize` is not implemented for `Opaque`
             VarLong
             Vec<T>
             bool
-            f32
           and $N others
 
 error[E0277]: the trait bound `Opaque: Deserialize` is not satisfied
@@ -32,6 +32,7 @@ help: the trait `Deserialize` is not implemented for `Opaque`
 1 | struct Opaque;
   | ^^^^^^^^^^^^^
   = help: the following other types implement trait `Deserialize`:
+            ByteArray
             HasOpaque
             Option<T>
             String
@@ -39,5 +40,4 @@ help: the trait `Deserialize` is not implemented for `Opaque`
             Vec<T>
             bool
             f32
-            f64
           and $N others

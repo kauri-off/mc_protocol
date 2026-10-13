@@ -70,8 +70,13 @@ impl Cfb8Encryptor {
     /// Encrypt a slice of plaintext bytes, returning the ciphertext.
     pub fn encrypt(&mut self, plaintext: &[u8]) -> io::Result<Vec<u8>> {
         let mut output = plaintext.to_vec();
-        self.cipher.encrypt(&mut output);
+        self.encrypt_in_place(&mut output);
         Ok(output)
+    }
+
+    /// Encrypt `data` in place, without allocating.
+    pub fn encrypt_in_place(&mut self, data: &mut [u8]) {
+        self.cipher.encrypt(data);
     }
 }
 
@@ -92,8 +97,13 @@ impl Cfb8Decryptor {
     /// Decrypt a slice of ciphertext bytes, returning the plaintext.
     pub fn decrypt(&mut self, ciphertext: &[u8]) -> io::Result<Vec<u8>> {
         let mut output = ciphertext.to_vec();
-        self.cipher.decrypt(&mut output);
+        self.decrypt_in_place(&mut output);
         Ok(output)
+    }
+
+    /// Decrypt `data` in place, without allocating.
+    pub fn decrypt_in_place(&mut self, data: &mut [u8]) {
+        self.cipher.decrypt(data);
     }
 }
 
@@ -128,7 +138,7 @@ impl<R: Read> Read for Cfb8ReadHalf<R> {
         if n == 0 {
             return Ok(0);
         }
-        self.decryptor.cipher.decrypt(&mut buf[..n]);
+        self.decryptor.decrypt_in_place(&mut buf[..n]);
         Ok(n)
     }
 }
@@ -137,6 +147,8 @@ impl<R: Read> Read for Cfb8ReadHalf<R> {
 pub struct Cfb8WriteHalf<W> {
     inner: W,
     encryptor: Cfb8Encryptor,
+    /// Scratch space for ciphertext, reused across writes.
+    buffer: Vec<u8>,
 }
 
 impl<W: Write> Cfb8WriteHalf<W> {
@@ -145,6 +157,7 @@ impl<W: Write> Cfb8WriteHalf<W> {
         Ok(Self {
             inner,
             encryptor: Cfb8Encryptor::new(key)?,
+            buffer: Vec::new(),
         })
     }
 
@@ -156,8 +169,10 @@ impl<W: Write> Cfb8WriteHalf<W> {
 
 impl<W: Write> Write for Cfb8WriteHalf<W> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let encrypted = self.encryptor.encrypt(buf)?;
-        self.inner.write_all(&encrypted)?;
+        self.buffer.clear();
+        self.buffer.extend_from_slice(buf);
+        self.encryptor.encrypt_in_place(&mut self.buffer);
+        self.inner.write_all(&self.buffer)?;
         Ok(buf.len())
     }
 
@@ -298,9 +313,11 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for AsyncCfb8WriteHalf<W> {
             return Poll::Ready(Ok(0));
         }
 
+        // The drain above emptied the buffer, so only fresh plaintext is encrypted here.
         let this = &mut *self;
+        debug_assert!(this.buffer.is_empty());
         this.buffer.extend_from_slice(buf);
-        this.encryptor.cipher.encrypt(&mut this.buffer);
+        this.encryptor.encrypt_in_place(&mut this.buffer);
 
         // Opportunistically write; whatever the inner writer doesn't take now
         // stays buffered and is drained on the next write/flush/shutdown.

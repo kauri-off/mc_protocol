@@ -27,7 +27,7 @@ use crate::ser::{Deserialize, SerializationError, Serialize};
 use crate::varint::{VarInt, VarIntError};
 
 #[cfg(feature = "async")]
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -74,6 +74,25 @@ fn active_threshold(threshold: Option<i32>) -> Option<usize> {
     threshold.and_then(|t| usize::try_from(t).ok())
 }
 
+fn checked_read_len(len: VarInt) -> Result<usize, PacketError> {
+    if len.0 < 0 || len.0 as usize > MAX_PACKET_LENGTH {
+        return Err(PacketError::InvalidLength(len.0 as i64));
+    }
+    Ok(len.0 as usize)
+}
+
+/// Splits `[packet_id][payload]` in place, reusing the buffer for the payload.
+fn split_packet_id(mut data: Vec<u8>, offset: usize) -> Result<UncompressedPacket, PacketError> {
+    let mut cursor = Cursor::new(&data[offset..]);
+    let packet_id = VarInt::read_sync(&mut cursor)?.0;
+    let end = offset + cursor.position() as usize;
+    data.drain(..end);
+    Ok(UncompressedPacket {
+        packet_id,
+        payload: data,
+    })
+}
+
 fn checked_frame_len(len: usize) -> Result<i32, PacketError> {
     if len > MAX_PACKET_LENGTH {
         return Err(PacketError::InvalidLength(len as i64));
@@ -118,13 +137,16 @@ impl RawPacket {
     ///
     /// Fails with [`PacketError::InvalidLength`] if the declared length is
     /// negative or exceeds [`MAX_PACKET_LENGTH`].
+    ///
+    /// The length prefix is read byte by byte, so wrap unbuffered sources such
+    /// as sockets in a `BufReader`.
     pub fn read_sync<R: Read>(reader: &mut R) -> Result<Self, PacketError> {
-        let len = VarInt::read_sync(reader)?;
-        if len.0 < 0 || len.0 as usize > MAX_PACKET_LENGTH {
-            return Err(PacketError::InvalidLength(len.0 as i64));
+        let len = checked_read_len(VarInt::read_sync(reader)?)?;
+        let mut data = Vec::with_capacity(len);
+        reader.take(len as u64).read_to_end(&mut data)?;
+        if data.len() != len {
+            return Err(io::Error::from(io::ErrorKind::UnexpectedEof).into());
         }
-        let mut data = vec![0u8; len.0 as usize];
-        reader.read_exact(&mut data)?;
         Ok(RawPacket { data })
     }
 
@@ -141,20 +163,28 @@ impl RawPacket {
     ///
     /// Fails with [`PacketError::InvalidLength`] if the declared length is
     /// negative or exceeds [`MAX_PACKET_LENGTH`].
+    ///
+    /// The length prefix is read byte by byte, so wrap unbuffered sources such
+    /// as sockets in a `tokio::io::BufReader`. Not cancellation safe: a frame
+    /// interrupted midway is lost and the stream is left desynchronized.
     #[cfg(feature = "async")]
-    pub async fn read_async<R: AsyncReadExt + Unpin>(reader: &mut R) -> Result<Self, PacketError> {
-        let len = VarInt::read_async(reader).await?;
-        if len.0 < 0 || len.0 as usize > MAX_PACKET_LENGTH {
-            return Err(PacketError::InvalidLength(len.0 as i64));
+    pub async fn read_async<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Self, PacketError> {
+        use bytes::BufMut;
+
+        let len = checked_read_len(VarInt::read_async(reader).await?)?;
+        let mut data = Vec::with_capacity(len);
+        while data.len() < len {
+            let remaining = len - data.len();
+            if reader.read_buf(&mut (&mut data).limit(remaining)).await? == 0 {
+                return Err(io::Error::from(io::ErrorKind::UnexpectedEof).into());
+            }
         }
-        let mut data = vec![0u8; len.0 as usize];
-        reader.read_exact(&mut data).await?;
         Ok(RawPacket { data })
     }
 
     /// Write this packet frame to an async writer; rejects frames over [`MAX_PACKET_LENGTH`].
     #[cfg(feature = "async")]
-    pub async fn write_async<W: AsyncWriteExt + Unpin>(
+    pub async fn write_async<W: AsyncWrite + Unpin>(
         &self,
         writer: &mut W,
     ) -> Result<(), PacketError> {
@@ -226,14 +256,28 @@ impl RawPacket {
         if uncompressed.len() != data_length.0 as usize {
             return Err(PacketError::InvalidLength(uncompressed.len() as i64));
         }
-        let mut inner = Cursor::new(&uncompressed);
-        let packet_id = VarInt::read_sync(&mut inner)?;
-        let pos = inner.position() as usize;
-        let payload = uncompressed[pos..].to_vec();
-        Ok(UncompressedPacket {
-            packet_id: packet_id.0,
-            payload,
-        })
+        split_packet_id(uncompressed, 0)
+    }
+
+    /// Like [`uncompress`](Self::uncompress), but consumes the frame so an
+    /// uncompressed body is reused in place instead of copied.
+    pub fn into_uncompressed(
+        self,
+        threshold: Option<i32>,
+    ) -> Result<UncompressedPacket, PacketError> {
+        #[cfg(feature = "compression")]
+        if active_threshold(threshold).is_some() {
+            let mut cursor = Cursor::new(&self.data);
+            let data_length = VarInt::read_sync(&mut cursor)?.0;
+            if data_length != 0 {
+                return self.uncompress(threshold);
+            }
+            let offset = cursor.position() as usize;
+            return split_packet_id(self.data, offset);
+        }
+        #[cfg(not(feature = "compression"))]
+        let _ = threshold;
+        split_packet_id(self.data, 0)
     }
 
     /// Interpret frame without feature-gating (no compression).
@@ -352,7 +396,7 @@ impl UncompressedPacket {
 
     /// Write this packet to an async writer (uncompressed framing).
     #[cfg(feature = "async")]
-    pub async fn write_async<W: AsyncWriteExt + Unpin>(
+    pub async fn write_async<W: AsyncWrite + Unpin>(
         &self,
         writer: &mut W,
     ) -> Result<(), PacketError> {

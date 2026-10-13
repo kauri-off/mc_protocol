@@ -282,9 +282,10 @@ dependencies = [
 
 [[package]]
 name = "mc_protocol"
-version = "2.3.0"
+version = "2.4.0"
 dependencies = [
  "aes",
+ "bytes",
  "cfb8",
  "flate2",
  "mc_protocol_derive",
