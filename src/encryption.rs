@@ -144,11 +144,17 @@ impl<R: Read> Read for Cfb8ReadHalf<R> {
 }
 
 /// A synchronous write-half that transparently encrypts outgoing bytes.
+///
+/// Input is encrypted exactly once; ciphertext the inner writer refuses stays
+/// buffered, and its error surfaces on the next `write` or `flush`. Call
+/// `flush` to confirm delivery on non-blocking or timed-out writers.
 pub struct Cfb8WriteHalf<W> {
     inner: W,
     encryptor: Cfb8Encryptor,
-    /// Scratch space for ciphertext, reused across writes.
+    /// Encrypted bytes not yet accepted by the inner writer.
     buffer: Vec<u8>,
+    /// Number of bytes at the front of `buffer` already written.
+    written: usize,
 }
 
 impl<W: Write> Cfb8WriteHalf<W> {
@@ -158,25 +164,43 @@ impl<W: Write> Cfb8WriteHalf<W> {
             inner,
             encryptor: Cfb8Encryptor::new(key)?,
             buffer: Vec::new(),
+            written: 0,
         })
     }
 
-    /// Unwrap, discarding the encryptor state.
+    /// Unwrap, discarding the encryptor state and any unflushed ciphertext.
     pub fn into_inner(self) -> W {
         self.inner
+    }
+
+    fn drain_buffer(&mut self) -> io::Result<()> {
+        while self.written < self.buffer.len() {
+            match self.inner.write(&self.buffer[self.written..]) {
+                Ok(0) => return Err(io::ErrorKind::WriteZero.into()),
+                Ok(n) => self.written += n,
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
+                Err(e) => return Err(e),
+            }
+        }
+        self.buffer.clear();
+        self.written = 0;
+        Ok(())
     }
 }
 
 impl<W: Write> Write for Cfb8WriteHalf<W> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.buffer.clear();
+        // An error here consumes nothing, so the caller may safely retry.
+        self.drain_buffer()?;
         self.buffer.extend_from_slice(buf);
         self.encryptor.encrypt_in_place(&mut self.buffer);
-        self.inner.write_all(&self.buffer)?;
+        // `buf` is consumed from here on; a failure stays buffered and resurfaces later.
+        let _ = self.drain_buffer();
         Ok(buf.len())
     }
 
     fn flush(&mut self) -> io::Result<()> {
+        self.drain_buffer()?;
         self.inner.flush()
     }
 }
@@ -320,10 +344,8 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for AsyncCfb8WriteHalf<W> {
         this.encryptor.encrypt_in_place(&mut this.buffer);
 
         // Opportunistically write; whatever the inner writer doesn't take now
-        // stays buffered and is drained on the next write/flush/shutdown.
-        if let Poll::Ready(Err(e)) = self.poll_drain_buffer(cx) {
-            return Poll::Ready(Err(e));
-        }
+        // stays buffered, and any error resurfaces on the next write/flush/shutdown.
+        let _ = self.poll_drain_buffer(cx);
         Poll::Ready(Ok(buf.len()))
     }
 

@@ -23,7 +23,7 @@
 use std::io::{self, Cursor, Read, Write};
 use thiserror::Error;
 
-use crate::ser::{Deserialize, SerializationError, Serialize};
+use crate::ser::{Deserialize, MAX_PREALLOC_BYTES, SerializationError, Serialize};
 use crate::varint::{VarInt, VarIntError};
 
 #[cfg(feature = "async")]
@@ -69,16 +69,27 @@ pub const MAX_PACKET_LENGTH: usize = 2_097_151;
 /// Maximum `data_length` of a compressed packet (vanilla limit, 2^23 bytes).
 pub const MAX_UNCOMPRESSED_LENGTH: usize = 8_388_608;
 
-#[cfg(feature = "compression")]
 fn active_threshold(threshold: Option<i32>) -> Option<usize> {
     threshold.and_then(|t| usize::try_from(t).ok())
 }
 
-fn checked_read_len(len: VarInt) -> Result<usize, PacketError> {
-    if len.0 < 0 || len.0 as usize > MAX_PACKET_LENGTH {
+/// Maximum width of the frame length prefix on the wire.
+const MAX_FRAME_PREFIX_BYTES: usize = 3;
+
+fn checked_read_len((len, width): (VarInt, usize)) -> Result<usize, PacketError> {
+    if len.0 < 0 || len.0 as usize > MAX_PACKET_LENGTH || width > MAX_FRAME_PREFIX_BYTES {
         return Err(PacketError::InvalidLength(len.0 as i64));
     }
     Ok(len.0 as usize)
+}
+
+#[cfg(not(feature = "compression"))]
+fn compression_unavailable() -> PacketError {
+    io::Error::new(
+        io::ErrorKind::Unsupported,
+        "compression threshold is active but the `compression` feature is disabled",
+    )
+    .into()
 }
 
 /// Splits `[packet_id][payload]` in place, reusing the buffer for the payload.
@@ -136,13 +147,13 @@ impl RawPacket {
     /// Read a length-prefixed frame from a synchronous reader.
     ///
     /// Fails with [`PacketError::InvalidLength`] if the declared length is
-    /// negative or exceeds [`MAX_PACKET_LENGTH`].
+    /// negative, exceeds [`MAX_PACKET_LENGTH`], or its prefix is wider than 3 bytes.
     ///
     /// The length prefix is read byte by byte, so wrap unbuffered sources such
     /// as sockets in a `BufReader`.
     pub fn read_sync<R: Read>(reader: &mut R) -> Result<Self, PacketError> {
-        let len = checked_read_len(VarInt::read_sync(reader)?)?;
-        let mut data = Vec::with_capacity(len);
+        let len = checked_read_len(VarInt::read_sync_counted(reader)?)?;
+        let mut data = Vec::with_capacity(len.min(MAX_PREALLOC_BYTES));
         reader.take(len as u64).read_to_end(&mut data)?;
         if data.len() != len {
             return Err(io::Error::from(io::ErrorKind::UnexpectedEof).into());
@@ -162,7 +173,7 @@ impl RawPacket {
     /// Read a length-prefixed frame from an async reader (requires `async` feature).
     ///
     /// Fails with [`PacketError::InvalidLength`] if the declared length is
-    /// negative or exceeds [`MAX_PACKET_LENGTH`].
+    /// negative, exceeds [`MAX_PACKET_LENGTH`], or its prefix is wider than 3 bytes.
     ///
     /// The length prefix is read byte by byte, so wrap unbuffered sources such
     /// as sockets in a `tokio::io::BufReader`. Not cancellation safe: a frame
@@ -171,8 +182,8 @@ impl RawPacket {
     pub async fn read_async<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Self, PacketError> {
         use bytes::BufMut;
 
-        let len = checked_read_len(VarInt::read_async(reader).await?)?;
-        let mut data = Vec::with_capacity(len);
+        let len = checked_read_len(VarInt::read_async_counted(reader).await?)?;
+        let mut data = Vec::with_capacity(len.min(MAX_PREALLOC_BYTES));
         while data.len() < len {
             let remaining = len - data.len();
             if reader.read_buf(&mut (&mut data).limit(remaining)).await? == 0 {
@@ -183,6 +194,8 @@ impl RawPacket {
     }
 
     /// Write this packet frame to an async writer; rejects frames over [`MAX_PACKET_LENGTH`].
+    ///
+    /// Does not flush; buffering writers need `flush().await` afterwards.
     #[cfg(feature = "async")]
     pub async fn write_async<W: AsyncWrite + Unpin>(
         &self,
@@ -219,16 +232,17 @@ impl RawPacket {
     /// first field is `data_length` (VarInt): if 0, the rest is uncompressed;
     /// otherwise it is the uncompressed length and the rest is zlib-deflated.
     ///
-    /// Returns `Err` if decompression fails, if `data_length` is negative or
-    /// exceeds [`MAX_UNCOMPRESSED_LENGTH`], or if the decompressed size does not
-    /// match the declared `data_length` (zip-bomb guard).
+    /// Returns `Err` if decompression fails, if a non-zero `data_length` is
+    /// below `threshold`, if `data_length` is negative or exceeds
+    /// [`MAX_UNCOMPRESSED_LENGTH`], or if the decompressed size does not match
+    /// the declared `data_length` (zip-bomb guard).
     #[cfg(feature = "compression")]
     pub fn uncompress(&self, threshold: Option<i32>) -> Result<UncompressedPacket, PacketError> {
         use crate::compression::decompress_zlib_limited;
 
-        if active_threshold(threshold).is_none() {
+        let Some(active) = active_threshold(threshold) else {
             return self.as_uncompressed();
-        }
+        };
 
         let mut cursor = Cursor::new(&self.data);
         let data_length = VarInt::read_sync(&mut cursor)?;
@@ -247,6 +261,10 @@ impl RawPacket {
                 packet_id: packet_id.0,
                 payload,
             });
+        }
+
+        if (data_length.0 as usize) < active {
+            return Err(PacketError::InvalidLength(data_length.0 as i64));
         }
 
         // Compressed payload — never inflate past the declared size, and
@@ -276,13 +294,18 @@ impl RawPacket {
             return split_packet_id(self.data, offset);
         }
         #[cfg(not(feature = "compression"))]
-        let _ = threshold;
+        if active_threshold(threshold).is_some() {
+            return Err(compression_unavailable());
+        }
         split_packet_id(self.data, 0)
     }
 
-    /// Interpret frame without feature-gating (no compression).
+    /// Interpret an uncompressed frame; fails if a compression threshold is active.
     #[cfg(not(feature = "compression"))]
-    pub fn uncompress(&self, _threshold: Option<i32>) -> Result<UncompressedPacket, PacketError> {
+    pub fn uncompress(&self, threshold: Option<i32>) -> Result<UncompressedPacket, PacketError> {
+        if active_threshold(threshold).is_some() {
+            return Err(compression_unavailable());
+        }
         self.as_uncompressed()
     }
 }
@@ -370,11 +393,14 @@ impl UncompressedPacket {
     }
 
     #[cfg(not(feature = "compression"))]
-    /// Encode to raw packet (compression stub — feature not enabled).
+    /// Encode an uncompressed frame; fails if a compression threshold is active.
     pub fn to_raw_packet_compressed(
         &self,
-        _threshold: Option<i32>,
+        threshold: Option<i32>,
     ) -> Result<RawPacket, PacketError> {
+        if active_threshold(threshold).is_some() {
+            return Err(compression_unavailable());
+        }
         self.to_raw_packet()
     }
 
