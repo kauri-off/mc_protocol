@@ -10,6 +10,7 @@
 //! then deserialize from a `std::io::Cursor`.
 
 use std::{
+    cell::Cell,
     io::{self, Read, Write},
     string::FromUtf8Error,
 };
@@ -193,7 +194,9 @@ pub fn serialize_string_with_max<W: Write + Unpin>(
             max: max_utf16,
         });
     }
-    VarInt(s.len() as i32).write_sync(writer)?;
+    let byte_len =
+        i32::try_from(s.len()).map_err(|_| SerializationError::InvalidLength(s.len() as i64))?;
+    VarInt(byte_len).write_sync(writer)?;
     writer.write_all(s.as_bytes())?;
     Ok(())
 }
@@ -306,7 +309,9 @@ impl<T: Deserialize> Deserialize for Option<T> {
 impl<T: Serialize> Serialize for Vec<T> {
     /// Encoded as VarInt(length) followed by each element.
     fn serialize<W: Write + Unpin>(&self, writer: &mut W) -> Result<(), SerializationError> {
-        VarInt(self.len() as i32).write_sync(writer)?;
+        let len = i32::try_from(self.len())
+            .map_err(|_| SerializationError::InvalidLength(self.len() as i64))?;
+        VarInt(len).write_sync(writer)?;
         for item in self {
             item.serialize(writer)?;
         }
@@ -320,6 +325,7 @@ impl<T: Deserialize> Deserialize for Vec<T> {
         if len < 0 || len as usize > crate::packet::MAX_UNCOMPRESSED_LENGTH {
             return Err(SerializationError::InvalidLength(len as i64));
         }
+        let _scope = DecodeScope::enter(len as usize, std::mem::size_of::<T>())?;
         // Cap the pre-allocation: the length prefix is attacker-controlled,
         // so don't reserve gigabytes up front. The vector still grows to the
         // full length as elements are actually read.
@@ -333,7 +339,48 @@ impl<T: Deserialize> Deserialize for Vec<T> {
 }
 
 /// Upper bound on memory reserved from an untrusted length prefix before data arrives.
-const MAX_PREALLOC_BYTES: usize = 64 * 1024;
+pub(crate) const MAX_PREALLOC_BYTES: usize = 64 * 1024;
+
+/// Maximum nesting of `Vec<T>` while decoding one value; guards against stack overflow.
+pub const MAX_VEC_NESTING: u32 = 128;
+
+/// Maximum in-memory size of all `Vec<T>` nested in one top-level `Vec<T>`.
+pub const MAX_DECODED_VEC_BYTES: usize = 32 * 1024 * 1024;
+
+thread_local! {
+    static DECODE_STATE: Cell<(u32, usize)> = const { Cell::new((0, 0)) };
+}
+
+/// Tracks `Vec<T>` nesting and the shared memory budget of the current decode.
+struct DecodeScope;
+
+impl DecodeScope {
+    fn enter(len: usize, elem_size: usize) -> Result<Self, SerializationError> {
+        let (depth, budget) = DECODE_STATE.get();
+        let budget = if depth == 0 {
+            MAX_DECODED_VEC_BYTES
+        } else {
+            budget
+        };
+        if depth >= MAX_VEC_NESTING {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "Vec nesting too deep").into());
+        }
+        // Zero-sized elements still cost a loop iteration each.
+        let cost = len.saturating_mul(elem_size.max(1));
+        let Some(budget) = budget.checked_sub(cost) else {
+            return Err(SerializationError::InvalidLength(len as i64));
+        };
+        DECODE_STATE.set((depth + 1, budget));
+        Ok(Self)
+    }
+}
+
+impl Drop for DecodeScope {
+    fn drop(&mut self) {
+        let (depth, budget) = DECODE_STATE.get();
+        DECODE_STATE.set((depth - 1, budget));
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Prefixed byte array

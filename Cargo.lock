@@ -322,7 +322,7 @@ dependencies = [
 
 [[package]]
 name = "mc_protocol"
-version = "2.4.0"
+version = "2.5.0"
 dependencies = [
  "aes",
  "bytes",
@@ -338,7 +338,7 @@ dependencies = [
 
 [[package]]
 name = "mc_protocol_derive"
-version = "2.0.3"
+version = "2.0.4"
 dependencies = [
  "proc-macro2",
  "quote",

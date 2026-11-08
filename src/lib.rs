@@ -161,6 +161,7 @@
 //! larger packets are zlib-compressed.
 //!
 //! ```rust
+//! # #[cfg(feature = "compression")] fn main() {
 //! use mc_protocol::packet::UncompressedPacket;
 //!
 //! let up = UncompressedPacket::new(0x26, vec![0u8; 512]);
@@ -169,6 +170,8 @@
 //! let raw = up.to_raw_packet_compressed(threshold).unwrap();
 //! let decoded = raw.uncompress(threshold).unwrap();
 //! assert_eq!(decoded.packet_id, 0x26);
+//! # }
+//! # #[cfg(not(feature = "compression"))] fn main() {}
 //! ```
 //!
 //! ## Encryption (requires `encryption` feature)

@@ -131,7 +131,7 @@ fn expand_packet(input: &DeriveInput) -> syn::Result<TokenStream2> {
         quote! {
             impl #impl_generics #struct_name #ty_generics #where_clause {
                 /// The numeric ID that identifies this packet on the wire.
-                pub const PACKET_ID: i32 = #expr as i32;
+                pub const PACKET_ID: i32 = (#expr) as i32;
             }
 
             #[automatically_derived]
@@ -148,9 +148,9 @@ fn expand_packet(input: &DeriveInput) -> syn::Result<TokenStream2> {
 
         #[automatically_derived]
         impl #ser_impl_generics ::mc_protocol::ser::Serialize for #struct_name #ty_generics #ser_where_clause {
-            fn serialize<W: ::std::io::Write + ::core::marker::Unpin>(
+            fn serialize<__McWriter: ::std::io::Write + ::core::marker::Unpin>(
                 &self,
-                __writer: &mut W,
+                __writer: &mut __McWriter,
             ) -> ::core::result::Result<(), ::mc_protocol::ser::SerializationError> {
                 #(#serialize_calls)*
                 ::core::result::Result::Ok(())
@@ -159,8 +159,8 @@ fn expand_packet(input: &DeriveInput) -> syn::Result<TokenStream2> {
 
         #[automatically_derived]
         impl #de_impl_generics ::mc_protocol::ser::Deserialize for #struct_name #ty_generics #de_where_clause {
-            fn deserialize<R: ::std::io::Read + ::core::marker::Unpin>(
-                __reader: &mut R,
+            fn deserialize<__McReader: ::std::io::Read + ::core::marker::Unpin>(
+                __reader: &mut __McReader,
             ) -> ::core::result::Result<Self, ::mc_protocol::ser::SerializationError> {
                 ::core::result::Result::Ok(Self {
                     #(#deserialize_calls)*

@@ -101,7 +101,7 @@ pub fn decompress_zlib(data: &[u8]) -> Result<Vec<u8>, CompressionError> {
 ///
 /// Returns an error of kind `InvalidData` if the decompressed output would
 /// exceed `limit` — this guards against zip bombs, where a tiny compressed
-/// input expands to a huge output.
+/// input expands to a huge output — or if bytes follow the end of the zlib stream.
 pub fn decompress_zlib_limited(data: &[u8], limit: usize) -> Result<Vec<u8>, CompressionError> {
     // Room for limit + 1 bytes: producing more than `limit` means the input lied.
     let max_len = limit.saturating_add(1);
@@ -123,6 +123,9 @@ pub fn decompress_zlib_limited(data: &[u8], limit: usize) -> Result<Vec<u8>, Com
                 )));
             }
             if status == Status::StreamEnd {
+                if inflate.total_in() != data.len() as u64 {
+                    return Err(invalid_data("trailing data after zlib stream"));
+                }
                 return Ok(output);
             }
             if output.len() == output.capacity() {

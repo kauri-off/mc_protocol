@@ -111,14 +111,21 @@ impl VarInt {
 
     /// Decode a `VarInt` from a synchronous reader.
     pub fn read_sync<R: Read>(reader: &mut R) -> Result<Self, VarIntError> {
+        Ok(Self::read_sync_counted(reader)?.0)
+    }
+
+    /// Decode a `VarInt`, also returning how many bytes it occupied on the wire.
+    pub(crate) fn read_sync_counted<R: Read>(reader: &mut R) -> Result<(Self, usize), VarIntError> {
         let mut value: i32 = 0;
         let mut position: u32 = 0;
+        let mut count = 0;
 
         loop {
             // read_exact retries on ErrorKind::Interrupted and yields
             // UnexpectedEof when the stream ends mid-value.
             let mut byte_buf = [0u8; 1];
             reader.read_exact(&mut byte_buf)?;
+            count += 1;
 
             let byte = byte_buf[0];
             value |= ((byte & SEGMENT_BITS) as i32) << position;
@@ -133,7 +140,7 @@ impl VarInt {
             }
         }
 
-        Ok(VarInt(value))
+        Ok((VarInt(value), count))
     }
 
     /// Encode this `VarInt` into a synchronous writer.
@@ -148,11 +155,21 @@ impl VarInt {
     /// Decode a `VarInt` from an async reader (requires `async` feature).
     #[cfg(feature = "async")]
     pub async fn read_async<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Self, VarIntError> {
+        Ok(Self::read_async_counted(reader).await?.0)
+    }
+
+    /// Async counterpart of [`read_sync_counted`](Self::read_sync_counted).
+    #[cfg(feature = "async")]
+    pub(crate) async fn read_async_counted<R: AsyncRead + Unpin>(
+        reader: &mut R,
+    ) -> Result<(Self, usize), VarIntError> {
         let mut value: i32 = 0;
         let mut position: u32 = 0;
+        let mut count = 0;
 
         loop {
             let byte = reader.read_u8().await?;
+            count += 1;
             value |= ((byte & SEGMENT_BITS) as i32) << position;
 
             if byte & CONTINUE_BIT == 0 {
@@ -165,7 +182,7 @@ impl VarInt {
             }
         }
 
-        Ok(VarInt(value))
+        Ok((VarInt(value), count))
     }
 
     /// Encode this `VarInt` into an async writer (requires `async` feature).
